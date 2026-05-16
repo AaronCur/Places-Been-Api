@@ -22,7 +22,13 @@ public class CityService {
     @Transactional
     public CityResponse addCity(CityRequest cityrequest) {
 
-        Country country = countryRepository.findByName(cityrequest.country())
+        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase(cityrequest.name(), cityrequest.country());
+
+        if (alreadyExists) {
+            throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + cityrequest.country());
+        }
+
+        Country country = countryRepository.findByNameIgnoreCase(cityrequest.country())
                 .orElseGet(() -> new Country(cityrequest.country()));
 
         City city = new City(cityrequest.name(), cityrequest.latitude(), cityrequest.longitude(), country);
@@ -37,6 +43,7 @@ public class CityService {
 
     }
 
+    @Transactional
     public CityResponse updateCity(CityRequest cityRequest, Long id) {
         City city = cityRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
@@ -47,6 +54,16 @@ public class CityService {
 
         City updatedCity = cityRepository.save(city);
         return mapToResponse(updatedCity);
+    }
+
+    @Transactional
+    public void deleteCity(Long id) {
+
+        if (!cityRepository.existsById(id)) {
+            throw new EntityNotFoundException("City not found with id: " + id);
+        }
+
+        cityRepository.deleteById(id);
     }
 
     // Private helper to keep code DRY (Don't Repeat Yourself)

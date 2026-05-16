@@ -9,4 +9,6 @@ import java.util.List;
 public interface CityRepository extends JpaRepository<City, Long> {
     List<City> findAllByOrderByIdAsc();
 
+    boolean existsByNameIgnoreCaseAndCountry_NameIgnoreCase(String cityName, String countryName);
+
 }
