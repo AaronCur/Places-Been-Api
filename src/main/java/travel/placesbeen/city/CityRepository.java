@@ -11,4 +11,6 @@ public interface CityRepository extends JpaRepository<City, Long> {
 
     boolean existsByNameIgnoreCaseAndCountry_NameIgnoreCase(String cityName, String countryName);
 
+    long countByCountryId(Long id);
+
 }

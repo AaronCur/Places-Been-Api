@@ -43,8 +43,14 @@ public class CityService {
 
     }
 
+    public CityResponse getCityById(Long id) {
+        return cityRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
+    }
+
     @Transactional
-    public CityResponse updateCity(CityRequest cityRequest, Long id) {
+    public CityResponse updateCityById(CityRequest cityRequest, Long id) {
         City city = cityRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
 
@@ -57,13 +63,19 @@ public class CityService {
     }
 
     @Transactional
-    public void deleteCity(Long id) {
+    public void deleteCityById(Long id) {
 
-        if (!cityRepository.existsById(id)) {
-            throw new EntityNotFoundException("City not found with id: " + id);
-        }
+        City city = cityRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
+        Country country = city.getCountry();
 
         cityRepository.deleteById(id);
+        cityRepository.flush();
+
+        long remainingCities = cityRepository.countByCountryId(country.getId());
+
+        if (remainingCities == 0) {
+            countryRepository.delete(country);
+        }
     }
 
     // Private helper to keep code DRY (Don't Repeat Yourself)

@@ -1,7 +1,7 @@
 package travel.placesbeen.country;
 
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
-import travel.placesbeen.city.City;
 import travel.placesbeen.city.CityResponse;
 
 import java.util.List;
@@ -17,6 +17,12 @@ public class CountryService {
 
     public List<CountryResponse> getAllCountries(boolean includeCities) {
         return countryRepository.findAll().stream().map(country -> mapToResponse(country, includeCities)).toList();
+    }
+
+    public CountryResponse getCountryById(Long id) {
+        return mapToResponse(countryRepository.findById(id).orElseThrow(
+                () -> new EntityNotFoundException("Country not found with id: " + id)
+        ), false);
     }
 
     // Private helper to keep code DRY (Don't Repeat Yourself)

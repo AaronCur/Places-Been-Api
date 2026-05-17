@@ -27,7 +27,7 @@ public class CityController {
 
     @GetMapping(value = "/{id}", version = "1")
     public ResponseEntity<CityResponse> getCityById(@PathVariable Long id) {
-        return ResponseEntity.ok(new CityResponse(1L, "New York", 40.7128, -74.0060, "USA", "https://flagcdn.com/w40.png"));
+        return ResponseEntity.ok(cityService.getCityById(id));
     }
 
     @PostMapping(version = "1")
@@ -42,13 +42,13 @@ public class CityController {
     }
 
     @PutMapping(value = "/{id}", version = "1")
-    public ResponseEntity<CityResponse> updateCity(@PathVariable Long id, @Valid @RequestBody CityRequest cityRequest) {
-        return ResponseEntity.ok(cityService.updateCity(cityRequest, id));
+    public ResponseEntity<CityResponse> updateCityById(@PathVariable Long id, @Valid @RequestBody CityRequest cityRequest) {
+        return ResponseEntity.ok(cityService.updateCityById(cityRequest, id));
     }
 
     @DeleteMapping(value = "/{id}", version = "1")
-    public ResponseEntity<Void> deleteCity(@PathVariable Long id) {
-        cityService.deleteCity(id);
+    public ResponseEntity<Void> deleteCityById(@PathVariable Long id) {
+        cityService.deleteCityById(id);
         return ResponseEntity.noContent().build();
     }
 }
