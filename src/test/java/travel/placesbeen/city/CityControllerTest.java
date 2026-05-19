@@ -34,6 +34,7 @@ public class CityControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Berlin"));
     }
 
+
     @Test
     void shouldReturnCityById() throws Exception {
         CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "🇩🇪");
