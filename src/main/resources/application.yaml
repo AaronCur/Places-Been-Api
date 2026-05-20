@@ -2,9 +2,9 @@ spring:
   application:
     name: places-been
   datasource:
-    url:
+    url: jdbc:postgresql://db.acycmykkrhbcuxvgobam.supabase.co:5432/postgres
     username: postgres
-    password: jdbc:postgresql://db.acycmykkrhbcuxvgobam.supabase.co:5432/postgres
+    password: qcEFI1a%K$kj6JaU2^vQ
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
