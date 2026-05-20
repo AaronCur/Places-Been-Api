@@ -1,15 +1,14 @@
-# 1. Use an official lightweight Java OpenJDK image
+# --- Stage 1: Build ---
 FROM eclipse-temurin:25-jdk-alpine AS build
-
-# 2. Set the working directory inside the cloud container
 WORKDIR /app
-
-# 3. Copy your project files and compile the .jar file
 COPY . .
 RUN ./mvnw clean package -DskipTests
 
-# 4. Expose the port Spring Boot will run on
-EXPOSE 8080
+# --- Stage 2: Runtime ---
+FROM eclipse-temurin:25-jre-alpine
+WORKDIR /app
+# Only copy the jar from the build stage
+COPY --from=build /app/target/PlacesBeen-0.0.1-SNAPSHOT.jar app.jar
 
-# 5. Tell the container to execute the compiled Java application
-CMD ["java", "-jar", "target/PlacesBeen-0.0.1-SNAPSHOT.jar"]p", "-b"]
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
