@@ -1,5 +1,5 @@
 # 1. Use an official lightweight Java OpenJDK image
-FROM eclipse-temurin:17-jdk-alpine
+FROM eclipse-temurin:25-jdk-alpine AS build
 
 # 2. Set the working directory inside the cloud container
 WORKDIR /app
