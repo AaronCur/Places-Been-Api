@@ -2,8 +2,8 @@ spring:
   application:
     name: places-been
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
+    url: jdbc:postgresql://aws-1-eu-central-1.pooler.supabase.com:6543/postgres
+    username: postgres.acycmykkrhbcuxvgobam
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
