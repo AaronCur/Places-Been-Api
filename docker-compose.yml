@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     container_name: springboot_postgres
     environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=places_been_db
     ports:
       - "5433:5432"
