@@ -31,3 +31,6 @@ logging:
           descriptor:
             sql:
               BasicBinder: ERROR
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
