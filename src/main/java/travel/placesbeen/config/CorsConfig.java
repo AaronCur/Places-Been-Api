@@ -10,8 +10,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 @Profile("!test")
 public class CorsConfig {
-    // The ':http://localhost:4200' acts as a default fallback value for local development
-    @Value("${app.cors.allowed-origins:http://localhost:4200}")
+
+    @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
     @Bean
@@ -20,7 +20,7 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**") // Applies to all endpoints
-                        .allowedOrigins("http://localhost:4200") // Your Angular app
+                        .allowedOrigins(allowedOrigins) // Your Angular app
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);
