@@ -27,7 +27,8 @@ public class City {
     @Column(nullable = false)
     private Double longitude;
 
-    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE}) // Optimized for performance
+    // No cascade: countries are seeded reference data, so a city may only point at an existing one
+    @ManyToOne(fetch = FetchType.LAZY) // Optimized for performance
     @JoinColumn(name = "country_id", nullable = false)
     private Country country;
 

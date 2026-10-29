@@ -141,7 +141,7 @@ class CityServiceTest {
         when(cityRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(cityRepository.save(existing)).thenReturn(existing);
 
-        CityResponse response = cityService.updateCityById(new CityRequest("Berlin Mitte", "DE", 1.0, 2.0), 1L);
+        CityResponse response = cityService.updateCityById(new CityUpdateRequest("Berlin Mitte", 1.0, 2.0), 1L);
 
         assertThat(response.name()).isEqualTo("Berlin Mitte");
         assertThat(response.latitude()).isEqualTo(1.0);
@@ -152,10 +152,35 @@ class CityServiceTest {
     void updateCityById_throwsWhenNotFound() {
         when(cityRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cityService.updateCityById(new CityRequest("X", "YY", 0.0, 0.0), 99L))
+        assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("X", 0.0, 0.0), 99L))
                 .isInstanceOf(EntityNotFoundException.class);
 
         verify(cityRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCityById_throwsWhenRenamedToExistingCityInSameCountry() {
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(1L, "Germany", "DE"))));
+        when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Munich", "DE")).thenReturn(true);
+
+        assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("Munich", 1.0, 2.0), 1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Munich")
+                .hasMessageContaining("Germany");
+
+        verify(cityRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCityById_allowsCaseOnlyRenameWithoutDuplicateCheck() {
+        City existing = city(1L, "berlin", country(1L, "Germany", "DE"));
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(cityRepository.save(existing)).thenReturn(existing);
+
+        CityResponse response = cityService.updateCityById(new CityUpdateRequest("Berlin", 1.0, 2.0), 1L);
+
+        assertThat(response.name()).isEqualTo("Berlin");
+        verify(cityRepository, never()).existsByNameIgnoreCaseAndCountry_IsoCode(any(), any()); // would match itself
     }
 
     @Test

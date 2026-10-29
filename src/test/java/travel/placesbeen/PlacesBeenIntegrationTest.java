@@ -60,6 +60,8 @@ class PlacesBeenIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Berlin"))
                 .andExpect(jsonPath("$.country").value("Germany"))
+                .andExpect(jsonPath("$.countryCode").value("DE"))
+                .andExpect(jsonPath("$.countryFlag").value("🇩🇪"))
                 .andExpect(jsonPath("$.latitude").value(52.52));
     }
 
@@ -123,7 +125,7 @@ class PlacesBeenIntegrationTest {
         mockMvc.perform(put(location).header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name": "Berlin Mitte", "countryCode": "DE", "latitude": 52.5, "longitude": 13.4}
+                                {"name": "Berlin Mitte", "latitude": 52.5, "longitude": 13.4}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Berlin Mitte"));
@@ -131,6 +133,32 @@ class PlacesBeenIntegrationTest {
         mockMvc.perform(get(location).header("Api-Version", "1"))
                 .andExpect(jsonPath("$.name").value("Berlin Mitte"))
                 .andExpect(jsonPath("$.longitude").value(13.4));
+    }
+
+    @Test
+    void renamingCityToExistingNameInSameCountryIsRejectedWithConflict() throws Exception {
+        createCity("Berlin", "DE", 52.52, 13.405);
+        String munich = createCity("Munich", "DE", 48.137, 11.575);
+
+        mockMvc.perform(put(munich).header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "BERLIN", "latitude": 48.137, "longitude": 11.575}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void updateIgnoresCountryCodeSoCityStaysInItsCountry() throws Exception {
+        String location = createCity("Berlin", "DE", 52.52, 13.405);
+
+        mockMvc.perform(put(location).header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Berlin", "countryCode": "FR", "latitude": 52.52, "longitude": 13.405}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.countryCode").value("DE")); // not part of CityUpdateRequest, so ignored
     }
 
     @Test

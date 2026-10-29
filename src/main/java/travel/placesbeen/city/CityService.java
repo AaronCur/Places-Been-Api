@@ -52,13 +52,21 @@ public class CityService {
     }
 
     @Transactional
-    public CityResponse updateCityById(CityRequest cityRequest, Long id) {
+    public CityResponse updateCityById(CityUpdateRequest cityUpdateRequest, Long id) {
         City city = cityRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
 
-        city.setName(cityRequest.name());
-        city.setLatitude(cityRequest.latitude());
-        city.setLongitude(cityRequest.longitude());
+        // A case-only rename ("berlin" -> "Berlin") matches the city itself, so only check when the name really changes
+        boolean renamedToExisting = !city.getName().equalsIgnoreCase(cityUpdateRequest.name())
+                && cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode(cityUpdateRequest.name(), city.getCountry().getIsoCode());
+
+        if (renamedToExisting) {
+            throw new IllegalStateException("City already exists with name: " + cityUpdateRequest.name() + " in country: " + city.getCountry().getName());
+        }
+
+        city.setName(cityUpdateRequest.name());
+        city.setLatitude(cityUpdateRequest.latitude());
+        city.setLongitude(cityUpdateRequest.longitude());
 
         City updatedCity = cityRepository.save(city);
         return mapToResponse(updatedCity);
@@ -81,6 +89,7 @@ public class CityService {
                 city.getLatitude(),
                 city.getLongitude(),
                 city.getCountry().getName(),
+                city.getCountry().getIsoCode(),
                 Flags.fromIsoCode(city.getCountry().getIsoCode())
         );
     }

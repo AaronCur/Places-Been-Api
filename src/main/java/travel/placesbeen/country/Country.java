@@ -24,7 +24,7 @@ public class Country {
     @Column(nullable = false, unique = true, length = 2)
     private String isoCode;
 
-    @OneToMany(mappedBy = "country", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "country")
     private List<City> cities = new ArrayList<>();
 
     // Helper constructor for the Service logic

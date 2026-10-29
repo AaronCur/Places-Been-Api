@@ -38,7 +38,7 @@ public class CityControllerTest {
 
     @Test
     void shouldReturnAllCities() throws Exception {
-        CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "🇩🇪");
+        CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.getAllCities()).thenReturn(List.of(city));
 
         mockMvc.perform(get("/api/cities").header("Api-Version", "1"))
@@ -48,7 +48,7 @@ public class CityControllerTest {
 
     @Test
     void shouldReturnCityById() throws Exception {
-        CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "🇩🇪");
+        CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.getCityById(1L)).thenReturn(city);
 
         mockMvc.perform(get("/api/cities/1").header("Api-Version", "1"))
@@ -58,7 +58,7 @@ public class CityControllerTest {
 
     @Test
     void shouldAddCity() throws Exception {
-        CityResponse response = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "🇩🇪");
+        CityResponse response = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.addCity(any(CityRequest.class))).thenReturn(response);
 
         // Use a Java Text Block string literal instead of ObjectMapper
@@ -81,14 +81,13 @@ public class CityControllerTest {
 
     @Test
     void shouldUpdateCity() throws Exception {
-        CityResponse response = new CityResponse(1L, "Berlin Updated", 52.52, 13.405, "Germany", "🇩🇪");
-        when(cityService.updateCityById(any(CityRequest.class), eq(1L))).thenReturn(response);
+        CityResponse response = new CityResponse(1L, "Berlin Updated", 52.52, 13.405, "Germany", "DE", "🇩🇪");
+        when(cityService.updateCityById(any(CityUpdateRequest.class), eq(1L))).thenReturn(response);
 
         // Use a Java Text Block string literal instead of ObjectMapper
         String jsonRequestBody = """
                 {
                     "name": "Berlin Updated",
-                    "countryCode": "DE",
                     "latitude": 52.52,
                     "longitude": 13.405
                 }

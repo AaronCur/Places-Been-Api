@@ -9,5 +9,6 @@ public record CityResponse(
         Double latitude,
         Double longitude,
         String country,
+        String countryCode,
         String countryFlag
 ) { }

@@ -42,8 +42,8 @@ public class CityController {
     }
 
     @PutMapping(value = "/{id}", version = "1")
-    public ResponseEntity<CityResponse> updateCityById(@PathVariable Long id, @Valid @RequestBody CityRequest cityRequest) {
-        return ResponseEntity.ok(cityService.updateCityById(cityRequest, id));
+    public ResponseEntity<CityResponse> updateCityById(@PathVariable Long id, @Valid @RequestBody CityUpdateRequest cityUpdateRequest) {
+        return ResponseEntity.ok(cityService.updateCityById(cityUpdateRequest, id));
     }
 
     @DeleteMapping(value = "/{id}", version = "1")

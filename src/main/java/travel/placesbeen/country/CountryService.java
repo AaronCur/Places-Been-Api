@@ -37,6 +37,7 @@ public class CountryService {
                             city.getLatitude(),
                             city.getLongitude().doubleValue(),
                             null,
+                            null,
                             null
                     ))
                     .toList();
