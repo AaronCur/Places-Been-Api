@@ -25,9 +25,8 @@ class CountryServiceTest {
     private CountryService countryService;
 
     private static Country germanyWithCities() {
-        Country germany = new Country("Germany");
+        Country germany = new Country("DE", "Germany");
         germany.setId(1L);
-        germany.setFlag("🇩🇪");
         City berlin = new City("Berlin", 52.52, 13.405, germany);
         berlin.setId(10L);
         City munich = new City("Munich", 48.137, 11.575, germany);
@@ -38,7 +37,7 @@ class CountryServiceTest {
 
     @Test
     void getAllCountries_withoutCities_omitsCityList() {
-        when(countryRepository.findAll()).thenReturn(List.of(germanyWithCities()));
+        when(countryRepository.findByCitiesIsNotEmptyOrderByNameAsc()).thenReturn(List.of(germanyWithCities()));
 
         List<CountryResponse> result = countryService.getAllCountries(false);
 
@@ -50,7 +49,7 @@ class CountryServiceTest {
 
     @Test
     void getAllCountries_withCities_includesNestedCitiesWithoutCountryFields() {
-        when(countryRepository.findAll()).thenReturn(List.of(germanyWithCities()));
+        when(countryRepository.findByCitiesIsNotEmptyOrderByNameAsc()).thenReturn(List.of(germanyWithCities()));
 
         List<CountryResponse> result = countryService.getAllCountries(true);
 
@@ -65,8 +64,8 @@ class CountryServiceTest {
     }
 
     @Test
-    void getAllCountries_returnsEmptyListWhenNoCountries() {
-        when(countryRepository.findAll()).thenReturn(List.of());
+    void getAllCountries_returnsEmptyListWhenNoCountryVisited() {
+        when(countryRepository.findByCitiesIsNotEmptyOrderByNameAsc()).thenReturn(List.of());
 
         assertThat(countryService.getAllCountries(true)).isEmpty();
     }

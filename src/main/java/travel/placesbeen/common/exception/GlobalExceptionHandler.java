@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import travel.placesbeen.country.UnknownCountryCodeException;
 
 import java.time.LocalDateTime;
 
@@ -55,6 +56,21 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+
+    // 2b. Handle references to a country that isn't in the seeded table
+    @ExceptionHandler(UnknownCountryCodeException.class)
+    public ResponseEntity<ErrorResponse> handleUnknownCountryCode(
+            UnknownCountryCodeException ex, WebRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                ex.getMessage(),
+                request.getDescription(false).replace("uri=", "")
+        );
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
 
     // 3. Handle JSON parsing exceptions
     @ExceptionHandler(HttpMessageNotReadableException.class)

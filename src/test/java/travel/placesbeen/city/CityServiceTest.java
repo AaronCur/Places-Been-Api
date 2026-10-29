@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import travel.placesbeen.country.Country;
 import travel.placesbeen.country.CountryRepository;
+import travel.placesbeen.country.UnknownCountryCodeException;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,10 +31,9 @@ class CityServiceTest {
     @InjectMocks
     private CityService cityService;
 
-    private static Country country(Long id, String name, String flag) {
-        Country country = new Country(name);
+    private static Country country(Long id, String name, String isoCode) {
+        Country country = new Country(isoCode, name);
         country.setId(id);
-        country.setFlag(flag);
         return country;
     }
 
@@ -44,10 +44,11 @@ class CityServiceTest {
     }
 
     @Test
-    void addCity_createsNewCountryWhenNoneExists() {
-        CityRequest request = new CityRequest("Berlin", "Germany", 52.52, 13.405);
-        when(cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase("Berlin", "Germany")).thenReturn(false);
-        when(countryRepository.findByNameIgnoreCase("Germany")).thenReturn(Optional.empty());
+    void addCity_attachesCityToSeededCountry() {
+        Country germany = country(7L, "Germany", "DE");
+        CityRequest request = new CityRequest("Berlin", "DE", 52.52, 13.405);
+        when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(germany));
+        when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "DE")).thenReturn(false);
         when(cityRepository.save(any(City.class))).thenAnswer(inv -> {
             City saved = inv.getArgument(0);
             saved.setId(1L);
@@ -58,37 +59,33 @@ class CityServiceTest {
 
         ArgumentCaptor<City> captor = ArgumentCaptor.forClass(City.class);
         verify(cityRepository).save(captor.capture());
-        assertThat(captor.getValue().getCountry().getId()).isNull(); // new, unsaved country
-        assertThat(captor.getValue().getCountry().getName()).isEqualTo("Germany");
+        assertThat(captor.getValue().getCountry()).isSameAs(germany);
+        verify(countryRepository, never()).save(any()); // countries are seeded, never created here
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.name()).isEqualTo("Berlin");
         assertThat(response.country()).isEqualTo("Germany");
+        assertThat(response.countryFlag()).isEqualTo("🇩🇪");
         assertThat(response.latitude()).isEqualTo(52.52);
         assertThat(response.longitude()).isEqualTo(13.405);
     }
 
     @Test
-    void addCity_reusesExistingCountry() {
-        Country germany = country(7L, "Germany", "🇩🇪");
-        CityRequest request = new CityRequest("Munich", "germany", 48.137, 11.575);
-        when(cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase("Munich", "germany")).thenReturn(false);
-        when(countryRepository.findByNameIgnoreCase("germany")).thenReturn(Optional.of(germany));
-        when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
+    void addCity_throwsWhenCountryCodeUnknown() {
+        when(countryRepository.findByIsoCode("QQ")).thenReturn(Optional.empty());
 
-        CityResponse response = cityService.addCity(request);
+        assertThatThrownBy(() -> cityService.addCity(new CityRequest("Nowhere", "QQ", 0.0, 0.0)))
+                .isInstanceOf(UnknownCountryCodeException.class)
+                .hasMessageContaining("QQ");
 
-        ArgumentCaptor<City> captor = ArgumentCaptor.forClass(City.class);
-        verify(cityRepository).save(captor.capture());
-        assertThat(captor.getValue().getCountry()).isSameAs(germany);
-        assertThat(response.country()).isEqualTo("Germany");
-        assertThat(response.countryFlag()).isEqualTo("🇩🇪");
+        verifyNoInteractions(cityRepository);
     }
 
     @Test
     void addCity_throwsWhenCityAlreadyExistsInCountry() {
-        CityRequest request = new CityRequest("Berlin", "Germany", 52.52, 13.405);
-        when(cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase("Berlin", "Germany")).thenReturn(true);
+        CityRequest request = new CityRequest("Berlin", "DE", 52.52, 13.405);
+        when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(country(7L, "Germany", "DE")));
+        when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "DE")).thenReturn(true);
 
         assertThatThrownBy(() -> cityService.addCity(request))
                 .isInstanceOf(IllegalStateException.class)
@@ -96,12 +93,11 @@ class CityServiceTest {
                 .hasMessageContaining("Germany");
 
         verify(cityRepository, never()).save(any());
-        verifyNoInteractions(countryRepository);
     }
 
     @Test
     void getAllCities_mapsEveryCity() {
-        Country germany = country(1L, "Germany", "🇩🇪");
+        Country germany = country(1L, "Germany", "DE");
         when(cityRepository.findAllByOrderByIdAsc()).thenReturn(List.of(
                 city(1L, "Berlin", germany),
                 city(2L, "Hamburg", germany)));
@@ -121,13 +117,13 @@ class CityServiceTest {
 
     @Test
     void getCityById_returnsCity() {
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(1L, "Germany", null))));
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(1L, "Germany", "DE"))));
 
         CityResponse response = cityService.getCityById(1L);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.name()).isEqualTo("Berlin");
-        assertThat(response.countryFlag()).isNull();
+        assertThat(response.countryFlag()).isEqualTo("🇩🇪");
     }
 
     @Test
@@ -141,11 +137,11 @@ class CityServiceTest {
 
     @Test
     void updateCityById_updatesNameAndCoordinates() {
-        City existing = city(1L, "Berlin", country(1L, "Germany", null));
+        City existing = city(1L, "Berlin", country(1L, "Germany", "DE"));
         when(cityRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(cityRepository.save(existing)).thenReturn(existing);
 
-        CityResponse response = cityService.updateCityById(new CityRequest("Berlin Mitte", "Germany", 1.0, 2.0), 1L);
+        CityResponse response = cityService.updateCityById(new CityRequest("Berlin Mitte", "DE", 1.0, 2.0), 1L);
 
         assertThat(response.name()).isEqualTo("Berlin Mitte");
         assertThat(response.latitude()).isEqualTo(1.0);
@@ -156,34 +152,20 @@ class CityServiceTest {
     void updateCityById_throwsWhenNotFound() {
         when(cityRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cityService.updateCityById(new CityRequest("X", "Y", 0.0, 0.0), 99L))
+        assertThatThrownBy(() -> cityService.updateCityById(new CityRequest("X", "YY", 0.0, 0.0), 99L))
                 .isInstanceOf(EntityNotFoundException.class);
 
         verify(cityRepository, never()).save(any());
     }
 
     @Test
-    void deleteCityById_deletesCountryWhenLastCityRemoved() {
-        Country germany = country(5L, "Germany", null);
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", germany)));
-        when(cityRepository.countByCountryId(5L)).thenReturn(0L);
+    void deleteCityById_deletesCityButNeverTheSeededCountry() {
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(5L, "Germany", "DE"))));
 
         cityService.deleteCityById(1L);
 
         verify(cityRepository).deleteById(1L);
-        verify(countryRepository).delete(germany);
-    }
-
-    @Test
-    void deleteCityById_keepsCountryWhenOtherCitiesRemain() {
-        Country germany = country(5L, "Germany", null);
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", germany)));
-        when(cityRepository.countByCountryId(5L)).thenReturn(2L);
-
-        cityService.deleteCityById(1L);
-
-        verify(cityRepository).deleteById(1L);
-        verify(countryRepository, never()).delete(any());
+        verifyNoInteractions(countryRepository);
     }
 
     @Test

@@ -5,6 +5,8 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import travel.placesbeen.country.Country;
 import travel.placesbeen.country.CountryRepository;
+import travel.placesbeen.country.Flags;
+import travel.placesbeen.country.UnknownCountryCodeException;
 
 import java.util.List;
 
@@ -22,14 +24,14 @@ public class CityService {
     @Transactional
     public CityResponse addCity(CityRequest cityrequest) {
 
-        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase(cityrequest.name(), cityrequest.country());
+        Country country = countryRepository.findByIsoCode(cityrequest.countryCode())
+                .orElseThrow(() -> new UnknownCountryCodeException(cityrequest.countryCode()));
+
+        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode(cityrequest.name(), cityrequest.countryCode());
 
         if (alreadyExists) {
-            throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + cityrequest.country());
+            throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + country.getName());
         }
-
-        Country country = countryRepository.findByNameIgnoreCase(cityrequest.country())
-                .orElseGet(() -> new Country(cityrequest.country()));
 
         City city = new City(cityrequest.name(), cityrequest.latitude(), cityrequest.longitude(), country);
 
@@ -65,17 +67,10 @@ public class CityService {
     @Transactional
     public void deleteCityById(Long id) {
 
-        City city = cityRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
-        Country country = city.getCountry();
+        cityRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
 
+        // Countries are seeded reference data, so they stay; a country without cities is simply no longer visited
         cityRepository.deleteById(id);
-        cityRepository.flush();
-
-        long remainingCities = cityRepository.countByCountryId(country.getId());
-
-        if (remainingCities == 0) {
-            countryRepository.delete(country);
-        }
     }
 
     // Private helper to keep code DRY (Don't Repeat Yourself)
@@ -86,7 +81,7 @@ public class CityService {
                 city.getLatitude(),
                 city.getLongitude(),
                 city.getCountry().getName(),
-                city.getCountry().getFlag()
+                Flags.fromIsoCode(city.getCountry().getIsoCode())
         );
     }
 

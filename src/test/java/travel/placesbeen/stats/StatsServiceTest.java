@@ -25,7 +25,7 @@ class StatsServiceTest {
 
     @Test
     void getStatsSummary_returnsRepositoryCounts() {
-        when(countryRepository.count()).thenReturn(3L);
+        when(countryRepository.countByCitiesIsNotEmpty()).thenReturn(3L);
         when(cityRepository.count()).thenReturn(12L);
 
         StatsSummaryResponse summary = statsService.getStatsSummary();
@@ -36,7 +36,7 @@ class StatsServiceTest {
 
     @Test
     void getStatsSummary_returnsZerosWhenEmpty() {
-        when(countryRepository.count()).thenReturn(0L);
+        when(countryRepository.countByCitiesIsNotEmpty()).thenReturn(0L);
         when(cityRepository.count()).thenReturn(0L);
 
         assertThat(statsService.getStatsSummary()).isEqualTo(new StatsSummaryResponse(0, 0));

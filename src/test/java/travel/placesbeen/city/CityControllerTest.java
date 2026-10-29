@@ -7,6 +7,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import travel.placesbeen.country.UnknownCountryCodeException;
 
 import java.util.List;
 
@@ -29,7 +30,7 @@ public class CityControllerTest {
     private static final String VALID_BODY = """
             {
                 "name": "Berlin",
-                "country": "Germany",
+                "countryCode": "DE",
                 "latitude": 52.52,
                 "longitude": 13.405
             }
@@ -64,7 +65,7 @@ public class CityControllerTest {
         String jsonRequestBody = """
                 {
                     "name": "Berlin",
-                    "country": "Germany",
+                    "countryCode": "DE",
                     "latitude": 52.52,
                     "longitude": 13.405
                 }
@@ -87,7 +88,7 @@ public class CityControllerTest {
         String jsonRequestBody = """
                 {
                     "name": "Berlin Updated",
-                    "country": "Germany",
+                    "countryCode": "DE",
                     "latitude": 52.52,
                     "longitude": 13.405
                 }
@@ -150,6 +151,18 @@ public class CityControllerTest {
     }
 
     @Test
+    void shouldReturn400WhenCountryCodeUnknown() throws Exception {
+        when(cityService.addCity(any(CityRequest.class))).thenThrow(new UnknownCountryCodeException("DE"));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Unknown country code: DE"));
+    }
+
+    @Test
     void shouldReturn400WhenRequiredFieldsMissing() throws Exception {
         String invalidBody = """
                 {
@@ -164,8 +177,28 @@ public class CityControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message", containsString("name")))
-                .andExpect(jsonPath("$.message", containsString("country")))
+                .andExpect(jsonPath("$.message", containsString("countryCode")))
                 .andExpect(jsonPath("$.message", containsString("longitude")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldReturn400WhenCountryCodeIsNotIsoAlpha2() throws Exception {
+        String body = """
+                {
+                    "name": "Berlin",
+                    "countryCode": "de",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """;
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("countryCode")));
 
         verifyNoInteractions(cityService);
     }
@@ -194,7 +227,7 @@ public class CityControllerTest {
         String body = """
                 {
                     "name": "Berlin",
-                    "country": "Germany",
+                    "countryCode": "DE",
                     "latitude": "north",
                     "longitude": 13.405
                 }

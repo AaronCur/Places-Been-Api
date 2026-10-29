@@ -16,7 +16,7 @@ public class StatsService {
     }
 
     public StatsSummaryResponse getStatsSummary() {
-        long totalCountries = countryRepository.count();
+        long totalCountries = countryRepository.countByCitiesIsNotEmpty(); // visited, not all seeded countries
         long totalCities = cityRepository.count();
 
         return new StatsSummaryResponse(totalCountries, totalCities);

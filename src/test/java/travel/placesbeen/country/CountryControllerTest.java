@@ -28,7 +28,7 @@ class CountryControllerTest {
     @Test
     void shouldReturnCountriesWithoutCitiesByDefault() throws Exception {
         when(countryService.getAllCountries(false))
-                .thenReturn(List.of(new CountryResponse(1L, "Germany", "🇩🇪", null)));
+                .thenReturn(List.of(new CountryResponse(1L, "Germany", "DE", "🇩🇪", null)));
 
         mockMvc.perform(get("/api/countries").header("Api-Version", "1"))
                 .andExpect(status().isOk())
@@ -43,7 +43,7 @@ class CountryControllerTest {
     void shouldReturnCountriesWithCitiesWhenRequested() throws Exception {
         CityResponse berlin = new CityResponse(10L, "Berlin", 52.52, 13.405, null, null);
         when(countryService.getAllCountries(true))
-                .thenReturn(List.of(new CountryResponse(1L, "Germany", "🇩🇪", List.of(berlin))));
+                .thenReturn(List.of(new CountryResponse(1L, "Germany", "DE", "🇩🇪", List.of(berlin))));
 
         mockMvc.perform(get("/api/countries").param("includeCities", "true").header("Api-Version", "1"))
                 .andExpect(status().isOk())
@@ -66,7 +66,7 @@ class CountryControllerTest {
 
     @Test
     void shouldReturnCountryById() throws Exception {
-        when(countryService.getCountryById(1L)).thenReturn(new CountryResponse(1L, "Germany", null, null));
+        when(countryService.getCountryById(1L)).thenReturn(new CountryResponse(1L, "Germany", null, null, null));
 
         mockMvc.perform(get("/api/countries/1").header("Api-Version", "1"))
                 .andExpect(status().isOk())

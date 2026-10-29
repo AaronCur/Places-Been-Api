@@ -22,13 +22,11 @@ class CityRepositoryTest {
     @Autowired
     private CountryRepository countryRepository;
 
-    private Country germany;
-    private Country france;
-
     @BeforeEach
     void setUp() {
-        germany = entityManager.persist(new Country("Germany"));
-        france = entityManager.persist(new Country("France"));
+        // Countries are seeded by Flyway (V3), so look them up rather than creating them
+        Country germany = countryRepository.findByIsoCode("DE").orElseThrow();
+        Country france = countryRepository.findByIsoCode("FR").orElseThrow();
         entityManager.persist(new City("Munich", 48.137, 11.575, germany));
         entityManager.persist(new City("Berlin", 52.52, 13.405, germany));
         entityManager.persist(new City("Lyon", 45.764, 4.835, france));
@@ -43,25 +41,22 @@ class CityRepositoryTest {
     }
 
     @Test
-    void existsByNameAndCountry_isCaseInsensitive() {
-        assertThat(cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase("BERLIN", "germany")).isTrue();
+    void existsByNameAndCountry_isCaseInsensitiveOnCityName() {
+        assertThat(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("BERLIN", "DE")).isTrue();
     }
 
     @Test
     void existsByNameAndCountry_isFalseForCityInDifferentCountry() {
-        assertThat(cityRepository.existsByNameIgnoreCaseAndCountry_NameIgnoreCase("Berlin", "France")).isFalse();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "FR")).isFalse();
     }
 
     @Test
-    void countByCountryId_countsOnlyThatCountrysCities() {
-        assertThat(cityRepository.countByCountryId(germany.getId())).isEqualTo(2);
-        assertThat(cityRepository.countByCountryId(france.getId())).isEqualTo(1);
-    }
+    void sameCityNameCanExistInTwoCountries() {
+        entityManager.persist(new City("Valencia", 39.47, -0.376, countryRepository.findByIsoCode("ES").orElseThrow()));
+        entityManager.persist(new City("Valencia", 10.162, -68.008, countryRepository.findByIsoCode("VE").orElseThrow()));
+        entityManager.flush(); // would fail here if city.name were still unique on its own
 
-    @Test
-    void findCountryByName_isCaseInsensitive() {
-        assertThat(countryRepository.findByNameIgnoreCase("gErMaNy"))
-                .hasValueSatisfying(c -> assertThat(c.getId()).isEqualTo(germany.getId()));
-        assertThat(countryRepository.findByNameIgnoreCase("Spain")).isEmpty();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Valencia", "ES")).isTrue();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Valencia", "VE")).isTrue();
     }
 }
