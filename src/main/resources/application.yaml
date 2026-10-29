@@ -10,16 +10,18 @@ spring:
       maximum-pool-size: 5
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    # Existing databases (Supabase) already have the V1 tables: record them as version 1 instead of failing
+    baseline-on-migrate: true
   mvc:
     apiversion:
       supported: 1
       default: 1
-      enabledd: true
       use:
         header: Api-Version
 logging:
