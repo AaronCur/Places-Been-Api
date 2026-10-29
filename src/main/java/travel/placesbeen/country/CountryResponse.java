@@ -1,6 +1,6 @@
 package travel.placesbeen.country;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
-import travel.placesbeen.city.City;
 import travel.placesbeen.city.CityResponse;
 
 import java.util.List;
@@ -9,6 +9,7 @@ import java.util.List;
 public record CountryResponse(
         Long id,
         String name,
+        String isoCode,
         String flag,
         List<CityResponse> cities) {
 }

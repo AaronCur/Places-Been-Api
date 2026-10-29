@@ -16,7 +16,7 @@ public class CountryService {
     }
 
     public List<CountryResponse> getAllCountries(boolean includeCities) {
-        return countryRepository.findAll().stream().map(country -> mapToResponse(country, includeCities)).toList();
+        return countryRepository.findByCitiesIsNotEmptyOrderByNameAsc().stream().map(country -> mapToResponse(country, includeCities)).toList();
     }
 
     public CountryResponse getCountryById(Long id) {
@@ -37,6 +37,7 @@ public class CountryService {
                             city.getLatitude(),
                             city.getLongitude().doubleValue(),
                             null,
+                            null,
                             null
                     ))
                     .toList();
@@ -45,7 +46,8 @@ public class CountryService {
         return new CountryResponse(
                 country.getId(),
                 country.getName(),
-                country.getFlag(),
+                country.getIsoCode(),
+                Flags.fromIsoCode(country.getIsoCode()),
                 nestedCities // This will cleanly pass either the list or null
         );
     }

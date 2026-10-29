@@ -7,11 +7,10 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
   mvc:
     apiversion:
       supported: 1
       default: 1
-      enabledd: true
       use:
         header: Api-Version
