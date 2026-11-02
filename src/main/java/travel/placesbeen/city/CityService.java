@@ -27,13 +27,16 @@ public class CityService {
         Country country = countryRepository.findByIsoCode(cityrequest.countryCode())
                 .orElseThrow(() -> new UnknownCountryCodeException(cityrequest.countryCode()));
 
-        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode(cityrequest.name(), cityrequest.state(), cityrequest.countryCode());
+        // Stored without stray spaces, or " Maine" would count as a different state from "Maine"
+        String state = cityrequest.state() == null ? null : cityrequest.state().strip();
+
+        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityrequest.name(), state, cityrequest.countryCode());
 
         if (alreadyExists) {
             throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + country.getName());
         }
 
-        City city = new City(cityrequest.name(), cityrequest.state(), cityrequest.latitude(), cityrequest.longitude(), country);
+        City city = new City(cityrequest.name(), state, cityrequest.latitude(), cityrequest.longitude(), country);
 
         City savedCity = cityRepository.save(city);
         return mapToResponse(savedCity);
@@ -58,7 +61,7 @@ public class CityService {
 
         // A case-only rename ("berlin" -> "Berlin") matches the city itself, so only check when the name really changes
         boolean renamedToExisting = !city.getName().equalsIgnoreCase(cityUpdateRequest.name())
-                && cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode(cityUpdateRequest.name(), city.getState(), city.getCountry().getIsoCode());
+                && cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityUpdateRequest.name(), city.getState(), city.getCountry().getIsoCode());
 
         if (renamedToExisting) {
             throw new IllegalStateException("City already exists with name: " + cityUpdateRequest.name() + " in country: " + city.getCountry().getName());

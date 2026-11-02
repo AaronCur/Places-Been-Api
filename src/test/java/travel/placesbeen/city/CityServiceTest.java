@@ -48,7 +48,7 @@ class CityServiceTest {
         Country germany = country(7L, "Germany", "DE");
         CityRequest request = new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405);
         when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(germany));
-        when(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Berlin", "Berlin", "DE")).thenReturn(false);
+        when(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Berlin", "Berlin", "DE")).thenReturn(false);
         when(cityRepository.save(any(City.class))).thenAnswer(inv -> {
             City saved = inv.getArgument(0);
             saved.setId(1L);
@@ -84,6 +84,18 @@ class CityServiceTest {
     }
 
     @Test
+    void addCity_stripsSpacesFromStateBeforeCheckingAndSaving() {
+        CityRequest request = new CityRequest("Portland", " Maine ", "US", 43.661, -70.255);
+        when(countryRepository.findByIsoCode("US")).thenReturn(Optional.of(country(9L, "United States", "US")));
+        when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CityResponse response = cityService.addCity(request);
+
+        verify(cityRepository).existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Maine", "US");
+        assertThat(response.state()).isEqualTo("Maine");
+    }
+
+    @Test
     void addCity_throwsWhenCountryCodeUnknown() {
         when(countryRepository.findByIsoCode("QQ")).thenReturn(Optional.empty());
 
@@ -98,7 +110,7 @@ class CityServiceTest {
     void addCity_throwsWhenCityAlreadyExistsInCountry() {
         CityRequest request = new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405);
         when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(country(7L, "Germany", "DE")));
-        when(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Berlin", "Berlin", "DE")).thenReturn(true);
+        when(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Berlin", "Berlin", "DE")).thenReturn(true);
 
         assertThatThrownBy(() -> cityService.addCity(request))
                 .isInstanceOf(IllegalStateException.class)
@@ -176,7 +188,7 @@ class CityServiceTest {
     @Test
     void updateCityById_throwsWhenRenamedToExistingCityInSameState() {
         when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Nuremberg", "Bavaria", country(1L, "Germany", "DE"))));
-        when(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Munich", "Bavaria", "DE")).thenReturn(true);
+        when(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Munich", "Bavaria", "DE")).thenReturn(true);
 
         assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("Munich", 1.0, 2.0), 1L))
                 .isInstanceOf(IllegalStateException.class)
@@ -195,7 +207,7 @@ class CityServiceTest {
         CityResponse response = cityService.updateCityById(new CityUpdateRequest("Berlin", 1.0, 2.0), 1L);
 
         assertThat(response.name()).isEqualTo("Berlin");
-        verify(cityRepository, never()).existsByNameIgnoreCaseAndStateAndCountry_IsoCode(any(), any(), any()); // would match itself
+        verify(cityRepository, never()).existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(any(), any(), any()); // would match itself
     }
 
     @Test

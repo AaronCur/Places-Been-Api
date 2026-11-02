@@ -7,12 +7,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import travel.placesbeen.city.CityRepository;
 import travel.placesbeen.country.CountryRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,7 +30,7 @@ class PlacesBeenIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
+    @MockitoSpyBean // real repository; two tests make its duplicate check miss, as a race would
     private CityRepository cityRepository;
 
     @Autowired
@@ -131,6 +133,52 @@ class PlacesBeenIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void stateDifferingOnlyInCaseOrSpacesIsRejectedWithConflict() throws Exception {
+        createCity("Portland", "Maine", "US", 43.661, -70.255);
+
+        for (String state : new String[]{"maine", " Maine "}) {
+            mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"name": "Portland", "state": "%s", "countryCode": "US", "latitude": 43.661, "longitude": -70.255}
+                                    """.formatted(state)))
+                    .andExpect(status().isConflict());
+        }
+    }
+
+    @Test
+    void duplicateThatGetsPastTheCheckIsRejectedByTheDatabaseWithConflict() throws Exception {
+        createCity("Portland", "Maine", "US", 43.661, -70.255);
+        doReturn(false).when(cityRepository)
+                .existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Maine", "US");
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Portland", "state": "Maine", "countryCode": "US", "latitude": 43.661, "longitude": -70.255}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Database conflict: The record may already exist or violates a database constraint."));
+    }
+
+    @Test
+    void renameThatGetsPastTheCheckIsRejectedByTheDatabaseWithConflict() throws Exception {
+        createCity("Munich", "Bavaria", "DE", 48.137, 11.575);
+        String nuremberg = createCity("Nuremberg", "Bavaria", "DE", 49.452, 11.077);
+        doReturn(false).when(cityRepository)
+                .existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Munich", "Bavaria", "DE");
+
+        // The UPDATE only runs at commit, so this also proves that failure still reaches the exception handler
+        mockMvc.perform(put(nuremberg).header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Munich", "latitude": 49.452, "longitude": 11.077}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Database conflict: The record may already exist or violates a database constraint."));
     }
 
     @Test

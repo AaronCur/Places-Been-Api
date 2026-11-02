@@ -44,17 +44,22 @@ class CityRepositoryTest {
 
     @Test
     void existsByNameStateAndCountry_isCaseInsensitiveOnCityName() {
-        assertThat(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("BERLIN", "Berlin", "DE")).isTrue();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("BERLIN", "Berlin", "DE")).isTrue();
     }
 
     @Test
     void existsByNameStateAndCountry_isFalseForCityInDifferentCountry() {
-        assertThat(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Berlin", "Berlin", "FR")).isFalse();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Berlin", "Berlin", "FR")).isFalse();
     }
 
     @Test
     void existsByNameStateAndCountry_isFalseForCityInDifferentState() {
-        assertThat(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Berlin", "Bavaria", "DE")).isFalse();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Berlin", "Bavaria", "DE")).isFalse();
+    }
+
+    @Test
+    void existsByNameStateAndCountry_isCaseInsensitiveOnState() {
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Munich", "BAVARIA", "DE")).isTrue();
     }
 
     @Test
@@ -63,8 +68,8 @@ class CityRepositoryTest {
         entityManager.persist(new City("Valencia", "Carabobo", 10.162, -68.008, countryRepository.findByIsoCode("VE").orElseThrow()));
         entityManager.flush(); // would fail here if city.name were still unique on its own
 
-        assertThat(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Valencia", "Valencia", "ES")).isTrue();
-        assertThat(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Valencia", "Carabobo", "VE")).isTrue();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Valencia", "Valencia", "ES")).isTrue();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Valencia", "Carabobo", "VE")).isTrue();
     }
 
     @Test
@@ -76,14 +81,15 @@ class CityRepositoryTest {
         entityManager.persist(new City("Gibraltar", null, 36.14, -5.35, gibraltar));
         entityManager.flush();
 
-        assertThat(cityRepository.findByNameIgnoreCaseAndStateAndCountry_IsoCode("Portland", "Maine", "US"))
+        assertThat(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Maine", "US"))
                 .hasValueSatisfying(city -> assertThat(city.getState()).isEqualTo("Maine"));
-        assertThat(cityRepository.findByNameIgnoreCaseAndStateAndCountry_IsoCode("Portland", "Texas", "US")).isEmpty();
+        assertThat(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Texas", "US")).isEmpty();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Maine", "US")).isTrue();
 
         // After the calls above on purpose: a null state needs "state is null", not the cached "state = ?"
-        assertThat(cityRepository.findByNameIgnoreCaseAndStateAndCountry_IsoCode("Gibraltar", null, "GI")).isPresent();
-        assertThat(cityRepository.findByNameIgnoreCaseAndStateAndCountry_IsoCode("Portland", null, "US")).isEmpty();
-        assertThat(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Gibraltar", null, "GI")).isTrue();
+        assertThat(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Gibraltar", null, "GI")).isPresent();
+        assertThat(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", null, "US")).isEmpty();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Gibraltar", null, "GI")).isTrue();
     }
 
     @Test

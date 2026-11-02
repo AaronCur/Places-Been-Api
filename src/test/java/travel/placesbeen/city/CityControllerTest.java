@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -180,6 +181,19 @@ public class CityControllerTest {
     }
 
     @Test
+    void shouldReturn409WhenDatabaseRejectsDuplicate() throws Exception {
+        when(cityService.addCity(any(CityRequest.class)))
+                .thenThrow(new DataIntegrityViolationException("uk_city_name_state_country"));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message", containsString("Database conflict")));
+    }
+
+    @Test
     void shouldReturn400WhenCountryCodeUnknown() throws Exception {
         when(cityService.addCity(any(CityRequest.class))).thenThrow(new UnknownCountryCodeException("DE"));
 
@@ -271,6 +285,45 @@ public class CityControllerTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("state")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldReturn400WhenNameIsTooLong() throws Exception {
+        String body = """
+                {
+                    "name": "%s",
+                    "countryCode": "DE",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """.formatted("x".repeat(256));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("name")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldReturn400WhenUpdatedNameIsTooLong() throws Exception {
+        String body = """
+                {
+                    "name": "%s",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """.formatted("x".repeat(256));
+
+        mockMvc.perform(put("/api/cities/1").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("name")));
 
         verifyNoInteractions(cityService);
     }
