@@ -95,6 +95,45 @@ class PlacesBeenIntegrationTest {
     }
 
     @Test
+    void sameCityNameInTwoStatesOfOneCountryIsAllowed() throws Exception {
+        createCity("Portland", "Oregon", "US", 45.523, -122.676);
+        createCity("Portland", "Maine", "US", 43.661, -70.255);
+
+        mockMvc.perform(get("/api/stats/summary").header("Api-Version", "1"))
+                .andExpect(jsonPath("$.totalCountries").value(1))
+                .andExpect(jsonPath("$.totalCities").value(2));
+    }
+
+    @Test
+    void sameCityNameAndStateIsRejectedWithConflict() throws Exception {
+        createCity("Portland", "Oregon", "US", 45.523, -122.676);
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "portland", "state": "Oregon", "countryCode": "US", "latitude": 45.523, "longitude": -122.676}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void sameCityWithNoStateIsRejectedWithConflict() throws Exception {
+        String body = """
+                {"name": "Gibraltar", "countryCode": "GI", "latitude": 36.14, "longitude": -5.35}
+                """;
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void sameCityNameInTwoCountriesIsAllowed() throws Exception {
         createCity("Valencia", "Valencia", "ES", 39.47, -0.376);
         createCity("Valencia", "Carabobo", "VE", 10.162, -68.008);
@@ -155,16 +194,30 @@ class PlacesBeenIntegrationTest {
     }
 
     @Test
-    void renamingCityToExistingNameInSameCountryIsRejectedWithConflict() throws Exception {
+    void renamingCityToExistingNameInSameStateIsRejectedWithConflict() throws Exception {
+        createCity("Munich", "Bavaria", "DE", 48.137, 11.575);
+        String nuremberg = createCity("Nuremberg", "Bavaria", "DE", 49.452, 11.077);
+
+        mockMvc.perform(put(nuremberg).header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "MUNICH", "latitude": 49.452, "longitude": 11.077}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void renamingCityToNameUsedInAnotherStateIsAllowed() throws Exception {
         createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
         String munich = createCity("Munich", "Bavaria", "DE", 48.137, 11.575);
 
         mockMvc.perform(put(munich).header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name": "BERLIN", "latitude": 48.137, "longitude": 11.575}
+                                {"name": "Berlin", "latitude": 48.137, "longitude": 11.575}
                                 """))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("Bavaria"));
     }
 
     @Test

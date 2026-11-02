@@ -48,7 +48,7 @@ class CityServiceTest {
         Country germany = country(7L, "Germany", "DE");
         CityRequest request = new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405);
         when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(germany));
-        when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "DE")).thenReturn(false);
+        when(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Berlin", "Berlin", "DE")).thenReturn(false);
         when(cityRepository.save(any(City.class))).thenAnswer(inv -> {
             City saved = inv.getArgument(0);
             saved.setId(1L);
@@ -98,7 +98,7 @@ class CityServiceTest {
     void addCity_throwsWhenCityAlreadyExistsInCountry() {
         CityRequest request = new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405);
         when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(country(7L, "Germany", "DE")));
-        when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "DE")).thenReturn(true);
+        when(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Berlin", "Berlin", "DE")).thenReturn(true);
 
         assertThatThrownBy(() -> cityService.addCity(request))
                 .isInstanceOf(IllegalStateException.class)
@@ -174,9 +174,9 @@ class CityServiceTest {
     }
 
     @Test
-    void updateCityById_throwsWhenRenamedToExistingCityInSameCountry() {
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", "Berlin", country(1L, "Germany", "DE"))));
-        when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Munich", "DE")).thenReturn(true);
+    void updateCityById_throwsWhenRenamedToExistingCityInSameState() {
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Nuremberg", "Bavaria", country(1L, "Germany", "DE"))));
+        when(cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode("Munich", "Bavaria", "DE")).thenReturn(true);
 
         assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("Munich", 1.0, 2.0), 1L))
                 .isInstanceOf(IllegalStateException.class)
@@ -195,7 +195,7 @@ class CityServiceTest {
         CityResponse response = cityService.updateCityById(new CityUpdateRequest("Berlin", 1.0, 2.0), 1L);
 
         assertThat(response.name()).isEqualTo("Berlin");
-        verify(cityRepository, never()).existsByNameIgnoreCaseAndCountry_IsoCode(any(), any()); // would match itself
+        verify(cityRepository, never()).existsByNameIgnoreCaseAndStateAndCountry_IsoCode(any(), any(), any()); // would match itself
     }
 
     @Test

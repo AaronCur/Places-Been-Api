@@ -27,7 +27,7 @@ public class CityService {
         Country country = countryRepository.findByIsoCode(cityrequest.countryCode())
                 .orElseThrow(() -> new UnknownCountryCodeException(cityrequest.countryCode()));
 
-        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode(cityrequest.name(), cityrequest.countryCode());
+        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode(cityrequest.name(), cityrequest.state(), cityrequest.countryCode());
 
         if (alreadyExists) {
             throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + country.getName());
@@ -58,7 +58,7 @@ public class CityService {
 
         // A case-only rename ("berlin" -> "Berlin") matches the city itself, so only check when the name really changes
         boolean renamedToExisting = !city.getName().equalsIgnoreCase(cityUpdateRequest.name())
-                && cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode(cityUpdateRequest.name(), city.getCountry().getIsoCode());
+                && cityRepository.existsByNameIgnoreCaseAndStateAndCountry_IsoCode(cityUpdateRequest.name(), city.getState(), city.getCountry().getIsoCode());
 
         if (renamedToExisting) {
             throw new IllegalStateException("City already exists with name: " + cityUpdateRequest.name() + " in country: " + city.getCountry().getName());

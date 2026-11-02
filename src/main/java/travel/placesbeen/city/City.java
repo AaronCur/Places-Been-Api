@@ -7,9 +7,7 @@ import lombok.Setter;
 import travel.placesbeen.country.Country;
 
 @Entity
-@Table(name = "city", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"name", "country_id"})
-})
+@Table(name = "city")
 @Getter
 @Setter
 @NoArgsConstructor
