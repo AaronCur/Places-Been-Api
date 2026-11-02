@@ -35,8 +35,9 @@ public class City {
     private Country country;
 
     // Standard constructor for easy testing/service use
-    public City(String name, Double latitude, Double longitude, Country country) {
+    public City(String name, String state, Double latitude, Double longitude, Country country) {
         this.name = name;
+        this.state = state;
         this.latitude = latitude;
         this.longitude = longitude;
         this.country = country;

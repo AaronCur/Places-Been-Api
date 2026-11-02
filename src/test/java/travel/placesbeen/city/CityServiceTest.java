@@ -37,8 +37,8 @@ class CityServiceTest {
         return country;
     }
 
-    private static City city(Long id, String name, Country country) {
-        City city = new City(name, 52.52, 13.405, country);
+    private static City city(Long id, String name, String state, Country country) {
+        City city = new City(name, state, 52.52, 13.405, country);
         city.setId(id);
         return city;
     }
@@ -46,7 +46,7 @@ class CityServiceTest {
     @Test
     void addCity_attachesCityToSeededCountry() {
         Country germany = country(7L, "Germany", "DE");
-        CityRequest request = new CityRequest("Berlin", "DE", 52.52, 13.405);
+        CityRequest request = new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405);
         when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(germany));
         when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "DE")).thenReturn(false);
         when(cityRepository.save(any(City.class))).thenAnswer(inv -> {
@@ -60,10 +60,12 @@ class CityServiceTest {
         ArgumentCaptor<City> captor = ArgumentCaptor.forClass(City.class);
         verify(cityRepository).save(captor.capture());
         assertThat(captor.getValue().getCountry()).isSameAs(germany);
+        assertThat(captor.getValue().getState()).isEqualTo("Berlin");
         verify(countryRepository, never()).save(any()); // countries are seeded, never created here
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.name()).isEqualTo("Berlin");
+        assertThat(response.state()).isEqualTo("Berlin");
         assertThat(response.country()).isEqualTo("Germany");
         assertThat(response.countryFlag()).isEqualTo("🇩🇪");
         assertThat(response.latitude()).isEqualTo(52.52);
@@ -71,10 +73,21 @@ class CityServiceTest {
     }
 
     @Test
+    void addCity_savesNoStateForPlaceWithoutOne() {
+        CityRequest request = new CityRequest("Gibraltar", null, "GI", 36.14, -5.35);
+        when(countryRepository.findByIsoCode("GI")).thenReturn(Optional.of(country(8L, "Gibraltar", "GI")));
+        when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CityResponse response = cityService.addCity(request);
+
+        assertThat(response.state()).isNull();
+    }
+
+    @Test
     void addCity_throwsWhenCountryCodeUnknown() {
         when(countryRepository.findByIsoCode("QQ")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cityService.addCity(new CityRequest("Nowhere", "QQ", 0.0, 0.0)))
+        assertThatThrownBy(() -> cityService.addCity(new CityRequest("Nowhere", null, "QQ", 0.0, 0.0)))
                 .isInstanceOf(UnknownCountryCodeException.class)
                 .hasMessageContaining("QQ");
 
@@ -83,7 +96,7 @@ class CityServiceTest {
 
     @Test
     void addCity_throwsWhenCityAlreadyExistsInCountry() {
-        CityRequest request = new CityRequest("Berlin", "DE", 52.52, 13.405);
+        CityRequest request = new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405);
         when(countryRepository.findByIsoCode("DE")).thenReturn(Optional.of(country(7L, "Germany", "DE")));
         when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Berlin", "DE")).thenReturn(true);
 
@@ -99,12 +112,13 @@ class CityServiceTest {
     void getAllCities_mapsEveryCity() {
         Country germany = country(1L, "Germany", "DE");
         when(cityRepository.findAllByOrderByIdAsc()).thenReturn(List.of(
-                city(1L, "Berlin", germany),
-                city(2L, "Hamburg", germany)));
+                city(1L, "Berlin", "Berlin", germany),
+                city(2L, "Hamburg", "Hamburg", germany)));
 
         List<CityResponse> result = cityService.getAllCities();
 
         assertThat(result).extracting(CityResponse::name).containsExactly("Berlin", "Hamburg");
+        assertThat(result).extracting(CityResponse::state).containsExactly("Berlin", "Hamburg");
         assertThat(result).allSatisfy(c -> assertThat(c.country()).isEqualTo("Germany"));
     }
 
@@ -117,7 +131,7 @@ class CityServiceTest {
 
     @Test
     void getCityById_returnsCity() {
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(1L, "Germany", "DE"))));
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", "Berlin", country(1L, "Germany", "DE"))));
 
         CityResponse response = cityService.getCityById(1L);
 
@@ -137,13 +151,14 @@ class CityServiceTest {
 
     @Test
     void updateCityById_updatesNameAndCoordinates() {
-        City existing = city(1L, "Berlin", country(1L, "Germany", "DE"));
+        City existing = city(1L, "Berlin", "Berlin", country(1L, "Germany", "DE"));
         when(cityRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(cityRepository.save(existing)).thenReturn(existing);
 
         CityResponse response = cityService.updateCityById(new CityUpdateRequest("Berlin Mitte", 1.0, 2.0), 1L);
 
         assertThat(response.name()).isEqualTo("Berlin Mitte");
+        assertThat(response.state()).isEqualTo("Berlin"); // not part of an update
         assertThat(response.latitude()).isEqualTo(1.0);
         assertThat(response.longitude()).isEqualTo(2.0);
     }
@@ -160,7 +175,7 @@ class CityServiceTest {
 
     @Test
     void updateCityById_throwsWhenRenamedToExistingCityInSameCountry() {
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(1L, "Germany", "DE"))));
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", "Berlin", country(1L, "Germany", "DE"))));
         when(cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode("Munich", "DE")).thenReturn(true);
 
         assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("Munich", 1.0, 2.0), 1L))
@@ -173,7 +188,7 @@ class CityServiceTest {
 
     @Test
     void updateCityById_allowsCaseOnlyRenameWithoutDuplicateCheck() {
-        City existing = city(1L, "berlin", country(1L, "Germany", "DE"));
+        City existing = city(1L, "berlin", "Berlin", country(1L, "Germany", "DE"));
         when(cityRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(cityRepository.save(existing)).thenReturn(existing);
 
@@ -185,7 +200,7 @@ class CityServiceTest {
 
     @Test
     void deleteCityById_deletesCityButNeverTheSeededCountry() {
-        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", country(5L, "Germany", "DE"))));
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", "Berlin", country(5L, "Germany", "DE"))));
 
         cityService.deleteCityById(1L);
 

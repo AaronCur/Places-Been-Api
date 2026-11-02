@@ -39,10 +39,10 @@ class PlacesBeenIntegrationTest {
         cityRepository.deleteAll(); // countries are seeded reference data, so they stay
     }
 
-    private String createCity(String name, String countryCode, double lat, double lon) throws Exception {
+    private String createCity(String name, String state, String countryCode, double lat, double lon) throws Exception {
         String body = """
-                {"name": "%s", "countryCode": "%s", "latitude": %s, "longitude": %s}
-                """.formatted(name, countryCode, lat, lon);
+                {"name": "%s", "state": "%s", "countryCode": "%s", "latitude": %s, "longitude": %s}
+                """.formatted(name, state, countryCode, lat, lon);
 
         MvcResult result = mockMvc.perform(post("/api/cities").header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -54,11 +54,12 @@ class PlacesBeenIntegrationTest {
 
     @Test
     void createdCityIsRetrievableAtLocationHeader() throws Exception {
-        String location = createCity("Berlin", "DE", 52.52, 13.405);
+        String location = createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
 
         mockMvc.perform(get(location).header("Api-Version", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Berlin"))
+                .andExpect(jsonPath("$.state").value("Berlin"))
                 .andExpect(jsonPath("$.country").value("Germany"))
                 .andExpect(jsonPath("$.countryCode").value("DE"))
                 .andExpect(jsonPath("$.countryFlag").value("🇩🇪"))
@@ -66,10 +67,26 @@ class PlacesBeenIntegrationTest {
     }
 
     @Test
+    void cityWithoutStateIsCreatedAndReturnedWithoutOne() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Gibraltar", "countryCode": "GI", "latitude": 36.14, "longitude": -5.35}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        mockMvc.perform(get(result.getResponse().getHeader("Location")).header("Api-Version", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Gibraltar"))
+                .andExpect(jsonPath("$.state").doesNotExist());
+    }
+
+    @Test
     void addingCitiesCountsEachVisitedCountryOnce() throws Exception {
-        createCity("Berlin", "DE", 52.52, 13.405);
-        createCity("Munich", "DE", 48.137, 11.575); // same country, counted once
-        createCity("Lyon", "FR", 45.764, 4.835);
+        createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
+        createCity("Munich", "Bavaria", "DE", 48.137, 11.575); // same country, counted once
+        createCity("Lyon", "Métropole de Lyon", "FR", 45.764, 4.835);
 
         mockMvc.perform(get("/api/stats/summary").header("Api-Version", "1"))
                 .andExpect(status().isOk())
@@ -79,8 +96,8 @@ class PlacesBeenIntegrationTest {
 
     @Test
     void sameCityNameInTwoCountriesIsAllowed() throws Exception {
-        createCity("Valencia", "ES", 39.47, -0.376);
-        createCity("Valencia", "VE", 10.162, -68.008);
+        createCity("Valencia", "Valencia", "ES", 39.47, -0.376);
+        createCity("Valencia", "Carabobo", "VE", 10.162, -68.008);
 
         mockMvc.perform(get("/api/stats/summary").header("Api-Version", "1"))
                 .andExpect(jsonPath("$.totalCountries").value(2))
@@ -89,7 +106,7 @@ class PlacesBeenIntegrationTest {
 
     @Test
     void countriesEndpointReturnsIsoCodeAndDerivedFlag() throws Exception {
-        createCity("Berlin", "DE", 52.52, 13.405);
+        createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
 
         mockMvc.perform(get("/api/countries").header("Api-Version", "1"))
                 .andExpect(jsonPath("$[0].isoCode").value("DE"))
@@ -98,29 +115,30 @@ class PlacesBeenIntegrationTest {
 
     @Test
     void countriesEndpointNestsCitiesWhenRequested() throws Exception {
-        createCity("Berlin", "DE", 52.52, 13.405);
+        createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
 
         mockMvc.perform(get("/api/countries").param("includeCities", "true").header("Api-Version", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Germany"))
-                .andExpect(jsonPath("$[0].cities[0].name").value("Berlin"));
+                .andExpect(jsonPath("$[0].cities[0].name").value("Berlin"))
+                .andExpect(jsonPath("$[0].cities[0].state").value("Berlin"));
     }
 
     @Test
     void duplicateCityIsRejectedWithConflict() throws Exception {
-        createCity("Berlin", "DE", 52.52, 13.405);
+        createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
 
         mockMvc.perform(post("/api/cities").header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name": "berlin", "countryCode": "DE", "latitude": 1.0, "longitude": 1.0}
+                                {"name": "berlin", "state": "Berlin", "countryCode": "DE", "latitude": 1.0, "longitude": 1.0}
                                 """))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void updatingCityChangesItsFields() throws Exception {
-        String location = createCity("Berlin", "DE", 52.52, 13.405);
+        String location = createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
 
         mockMvc.perform(put(location).header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -132,13 +150,14 @@ class PlacesBeenIntegrationTest {
 
         mockMvc.perform(get(location).header("Api-Version", "1"))
                 .andExpect(jsonPath("$.name").value("Berlin Mitte"))
+                .andExpect(jsonPath("$.state").value("Berlin")) // not part of an update
                 .andExpect(jsonPath("$.longitude").value(13.4));
     }
 
     @Test
     void renamingCityToExistingNameInSameCountryIsRejectedWithConflict() throws Exception {
-        createCity("Berlin", "DE", 52.52, 13.405);
-        String munich = createCity("Munich", "DE", 48.137, 11.575);
+        createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
+        String munich = createCity("Munich", "Bavaria", "DE", 48.137, 11.575);
 
         mockMvc.perform(put(munich).header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -150,7 +169,7 @@ class PlacesBeenIntegrationTest {
 
     @Test
     void updateIgnoresCountryCodeSoCityStaysInItsCountry() throws Exception {
-        String location = createCity("Berlin", "DE", 52.52, 13.405);
+        String location = createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
 
         mockMvc.perform(put(location).header("Api-Version", "1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -163,8 +182,8 @@ class PlacesBeenIntegrationTest {
 
     @Test
     void deletingLastCityInCountryStopsItBeingVisited() throws Exception {
-        String berlin = createCity("Berlin", "DE", 52.52, 13.405);
-        String munich = createCity("Munich", "DE", 48.137, 11.575);
+        String berlin = createCity("Berlin", "Berlin", "DE", 52.52, 13.405);
+        String munich = createCity("Munich", "Bavaria", "DE", 48.137, 11.575);
 
         mockMvc.perform(delete(berlin).header("Api-Version", "1")).andExpect(status().isNoContent());
         mockMvc.perform(get("/api/countries").header("Api-Version", "1"))

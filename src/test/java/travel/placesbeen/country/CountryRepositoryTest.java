@@ -17,8 +17,8 @@ class CountryRepositoryTest {
     @Autowired
     private CountryRepository countryRepository;
 
-    private void visit(String isoCode, String cityName) {
-        entityManager.persist(new City(cityName, 0.0, 0.0, countryRepository.findByIsoCode(isoCode).orElseThrow()));
+    private void visit(String isoCode, String cityName, String state) {
+        entityManager.persist(new City(cityName, state, 0.0, 0.0, countryRepository.findByIsoCode(isoCode).orElseThrow()));
         entityManager.flush();
         entityManager.clear(); // so countries are reloaded with their cities
     }
@@ -37,9 +37,9 @@ class CountryRepositoryTest {
 
     @Test
     void visitedQueries_onlyIncludeCountriesWithCities() {
-        visit("FR", "Lyon");
-        visit("DE", "Berlin");
-        visit("DE", "Munich");
+        visit("FR", "Lyon", "Métropole de Lyon");
+        visit("DE", "Berlin", "Berlin");
+        visit("DE", "Munich", "Bavaria");
 
         assertThat(countryRepository.findByCitiesIsNotEmptyOrderByNameAsc())
                 .extracting(Country::getIsoCode)

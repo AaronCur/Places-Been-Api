@@ -33,7 +33,7 @@ public class CityService {
             throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + country.getName());
         }
 
-        City city = new City(cityrequest.name(), cityrequest.latitude(), cityrequest.longitude(), country);
+        City city = new City(cityrequest.name(), cityrequest.state(), cityrequest.latitude(), cityrequest.longitude(), country);
 
         City savedCity = cityRepository.save(city);
         return mapToResponse(savedCity);
