@@ -21,6 +21,8 @@ public class City {
     @Column(nullable = false)
     private String name;
 
+    private String state;
+
     @Column(nullable = false)
     private Double latitude;
 

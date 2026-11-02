@@ -86,6 +86,7 @@ public class CityService {
         return new CityResponse(
                 city.getId(),
                 city.getName(),
+                city.getState(),
                 city.getLatitude(),
                 city.getLongitude(),
                 city.getCountry().getName(),
