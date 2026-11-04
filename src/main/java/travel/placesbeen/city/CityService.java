@@ -33,7 +33,7 @@ public class CityService {
         boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityrequest.name(), state, cityrequest.countryCode());
 
         if (alreadyExists) {
-            throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + country.getName());
+            throw new IllegalStateException(alreadyExistsMessage(cityrequest.name(), state, country));
         }
 
         City city = new City(cityrequest.name(), state, cityrequest.latitude(), cityrequest.longitude(), country);
@@ -64,7 +64,7 @@ public class CityService {
                 && cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityUpdateRequest.name(), city.getState(), city.getCountry().getIsoCode());
 
         if (renamedToExisting) {
-            throw new IllegalStateException("City already exists with name: " + cityUpdateRequest.name() + " in country: " + city.getCountry().getName());
+            throw new IllegalStateException(alreadyExistsMessage(cityUpdateRequest.name(), city.getState(), city.getCountry()));
         }
 
         city.setName(cityUpdateRequest.name());
@@ -82,6 +82,12 @@ public class CityService {
 
         // Countries are seeded reference data, so they stay; a country without cities is simply no longer visited
         cityRepository.deleteById(id);
+    }
+
+    // Names the state too, or "Portland already exists in United States" is ambiguous
+    private static String alreadyExistsMessage(String name, String state, Country country) {
+        String place = state == null ? name : name + ", " + state;
+        return "City already exists with name: " + place + " in country: " + country.getName();
     }
 
     // Private helper to keep code DRY (Don't Repeat Yourself)

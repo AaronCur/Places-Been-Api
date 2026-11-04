@@ -19,6 +19,7 @@ public class City {
     @Column(nullable = false)
     private String name;
 
+    // Optional: the dataset's state/region, null where there is none. Part of the city's uniqueness (see V4)
     private String state;
 
     @Column(nullable = false)

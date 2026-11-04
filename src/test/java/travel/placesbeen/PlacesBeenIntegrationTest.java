@@ -14,6 +14,7 @@ import travel.placesbeen.city.CityRepository;
 import travel.placesbeen.country.CountryRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.doReturn;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -103,6 +104,22 @@ class PlacesBeenIntegrationTest {
 
         mockMvc.perform(get("/api/stats/summary").header("Api-Version", "1"))
                 .andExpect(jsonPath("$.totalCountries").value(1))
+                .andExpect(jsonPath("$.totalCities").value(2));
+    }
+
+    @Test
+    void cityWithNoStateIsAllowedAlongsideSameNameWithState() throws Exception {
+        createCity("Portland", "Oregon", "US", 45.523, -122.676);
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Portland", "countryCode": "US", "latitude": 45.523, "longitude": -122.676}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.state").doesNotExist());
+
+        mockMvc.perform(get("/api/stats/summary").header("Api-Version", "1"))
                 .andExpect(jsonPath("$.totalCities").value(2));
     }
 
@@ -279,6 +296,44 @@ class PlacesBeenIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.countryCode").value("DE")); // not part of CityUpdateRequest, so ignored
+    }
+
+    @Test
+    void updateIgnoresStateSoCityKeepsItsState() throws Exception {
+        String location = createCity("Munich", "Bavaria", "DE", 48.137, 11.575);
+
+        mockMvc.perform(put(location).header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Munich", "state": "Berlin", "latitude": 48.137, "longitude": 11.575}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("Bavaria")); // not part of CityUpdateRequest, so ignored
+    }
+
+    @Test
+    void renamingCityWithNoStateToExistingNameWithNoStateIsRejectedWithConflict() throws Exception {
+        String body = """
+                {"name": "%s", "countryCode": "GI", "latitude": 36.14, "longitude": -5.35}
+                """;
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted("Gibraltar")))
+                .andExpect(status().isCreated());
+        String catalanBay = mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted("Catalan Bay")))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getHeader("Location");
+
+        // The service check must query "state is null"; "state = null" would match nothing and reach the database
+        mockMvc.perform(put(catalanBay).header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "gibraltar", "latitude": 36.14, "longitude": -5.35}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("gibraltar in country: Gibraltar")));
     }
 
     @Test

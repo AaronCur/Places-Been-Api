@@ -114,7 +114,7 @@ class CityServiceTest {
 
         assertThatThrownBy(() -> cityService.addCity(request))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Berlin")
+                .hasMessageContaining("Berlin, Berlin")
                 .hasMessageContaining("Germany");
 
         verify(cityRepository, never()).save(any());
@@ -192,8 +192,20 @@ class CityServiceTest {
 
         assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("Munich", 1.0, 2.0), 1L))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Munich")
+                .hasMessageContaining("Munich, Bavaria")
                 .hasMessageContaining("Germany");
+
+        verify(cityRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCityById_checksForDuplicateWithNoStateWhenCityHasNone() {
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Gibraltar", null, country(1L, "Gibraltar", "GI"))));
+        when(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Catalan Bay", null, "GI")).thenReturn(true);
+
+        assertThatThrownBy(() -> cityService.updateCityById(new CityUpdateRequest("Catalan Bay", 1.0, 2.0), 1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("name: Catalan Bay in country: Gibraltar"); // no ", null" in the message
 
         verify(cityRepository, never()).save(any());
     }

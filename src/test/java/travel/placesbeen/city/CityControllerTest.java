@@ -290,6 +290,39 @@ public class CityControllerTest {
     }
 
     @Test
+    void shouldAcceptNameAndStateOfExactly255Characters() throws Exception {
+        String name = "x".repeat(255);
+        String state = "y".repeat(255);
+        when(cityService.addCity(any(CityRequest.class)))
+                .thenReturn(new CityResponse(1L, name, state, 52.52, 13.405, "Germany", "DE", "🇩🇪"));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "%s", "state": "%s", "countryCode": "DE", "latitude": 52.52, "longitude": 13.405}
+                                """.formatted(name, state)))
+                .andExpect(status().isCreated());
+
+        verify(cityService).addCity(new CityRequest(name, state, "DE", 52.52, 13.405));
+    }
+
+    @Test
+    void shouldAcceptUpdatedNameOfExactly255Characters() throws Exception {
+        String name = "x".repeat(255);
+        when(cityService.updateCityById(any(CityUpdateRequest.class), eq(1L)))
+                .thenReturn(new CityResponse(1L, name, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪"));
+
+        mockMvc.perform(put("/api/cities/1").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "%s", "latitude": 52.52, "longitude": 13.405}
+                                """.formatted(name)))
+                .andExpect(status().isOk());
+
+        verify(cityService).updateCityById(new CityUpdateRequest(name, 52.52, 13.405), 1L);
+    }
+
+    @Test
     void shouldReturn400WhenNameIsTooLong() throws Exception {
         String body = """
                 {

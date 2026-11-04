@@ -101,6 +101,17 @@ class CityRepositoryTest {
     }
 
     @Test
+    void cityWithNoStateCanExistAlongsideSameNameWithState() {
+        Country usa = countryRepository.findByIsoCode("US").orElseThrow();
+        entityManager.persist(new City("Portland", "Oregon", 45.523, -122.676, usa));
+        entityManager.persist(new City("Portland", null, 45.523, -122.676, usa));
+        entityManager.flush(); // NULLS NOT DISTINCT only makes nulls equal to each other, not to 'Oregon'
+
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", null, "US")).isTrue();
+        assertThat(cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Oregon", "US")).isTrue();
+    }
+
+    @Test
     void sameCityNameAndStateInOneCountryIsRejected() {
         Country usa = countryRepository.findByIsoCode("US").orElseThrow();
         entityManager.persist(new City("Portland", "Oregon", 45.523, -122.676, usa));
