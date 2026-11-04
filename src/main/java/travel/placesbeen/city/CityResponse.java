@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public record CityResponse(
         Long id,
         String name,
+        String state,
         Double latitude,
         Double longitude,
         String country,

@@ -34,6 +34,7 @@ public class CountryService {
                     .map(city -> new CityResponse(
                             city.getId(),
                             city.getName(),
+                            city.getState(),
                             city.getLatitude(),
                             city.getLongitude().doubleValue(),
                             null,

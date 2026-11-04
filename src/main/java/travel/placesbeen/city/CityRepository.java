@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface CityRepository extends JpaRepository<City, Long> {
@@ -12,6 +13,8 @@ public interface CityRepository extends JpaRepository<City, Long> {
     @EntityGraph(attributePaths = "country")
     List<City> findAllByOrderByIdAsc();
 
-    boolean existsByNameIgnoreCaseAndCountry_IsoCode(String cityName, String isoCode);
+    boolean existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(String cityName, String state, String isoCode);
+
+    Optional<City> findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(String cityName, String state, String isoCode);
 
 }

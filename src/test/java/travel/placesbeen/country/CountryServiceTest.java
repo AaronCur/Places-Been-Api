@@ -27,9 +27,9 @@ class CountryServiceTest {
     private static Country germanyWithCities() {
         Country germany = new Country("DE", "Germany");
         germany.setId(1L);
-        City berlin = new City("Berlin", 52.52, 13.405, germany);
+        City berlin = new City("Berlin", "Berlin", 52.52, 13.405, germany);
         berlin.setId(10L);
-        City munich = new City("Munich", 48.137, 11.575, germany);
+        City munich = new City("Munich", "Bavaria", 48.137, 11.575, germany);
         munich.setId(11L);
         germany.getCities().addAll(List.of(berlin, munich));
         return germany;
@@ -56,6 +56,9 @@ class CountryServiceTest {
         assertThat(result.getFirst().cities())
                 .extracting("name")
                 .containsExactly("Berlin", "Munich");
+        assertThat(result.getFirst().cities())
+                .extracting("state")
+                .containsExactly("Berlin", "Bavaria");
         // country/countryFlag are redundant inside a country, so they are left null
         assertThat(result.getFirst().cities()).allSatisfy(city -> {
             assertThat(city.country()).isNull();

@@ -27,13 +27,16 @@ public class CityService {
         Country country = countryRepository.findByIsoCode(cityrequest.countryCode())
                 .orElseThrow(() -> new UnknownCountryCodeException(cityrequest.countryCode()));
 
-        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode(cityrequest.name(), cityrequest.countryCode());
+        // Stored without stray spaces, or " Maine" would count as a different state from "Maine"
+        String state = cityrequest.state() == null ? null : cityrequest.state().strip();
+
+        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityrequest.name(), state, cityrequest.countryCode());
 
         if (alreadyExists) {
-            throw new IllegalStateException("City already exists with name: " + cityrequest.name() + " in country: " + country.getName());
+            throw new IllegalStateException(alreadyExistsMessage(cityrequest.name(), state, country));
         }
 
-        City city = new City(cityrequest.name(), cityrequest.latitude(), cityrequest.longitude(), country);
+        City city = new City(cityrequest.name(), state, cityrequest.latitude(), cityrequest.longitude(), country);
 
         City savedCity = cityRepository.save(city);
         return mapToResponse(savedCity);
@@ -58,10 +61,10 @@ public class CityService {
 
         // A case-only rename ("berlin" -> "Berlin") matches the city itself, so only check when the name really changes
         boolean renamedToExisting = !city.getName().equalsIgnoreCase(cityUpdateRequest.name())
-                && cityRepository.existsByNameIgnoreCaseAndCountry_IsoCode(cityUpdateRequest.name(), city.getCountry().getIsoCode());
+                && cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityUpdateRequest.name(), city.getState(), city.getCountry().getIsoCode());
 
         if (renamedToExisting) {
-            throw new IllegalStateException("City already exists with name: " + cityUpdateRequest.name() + " in country: " + city.getCountry().getName());
+            throw new IllegalStateException(alreadyExistsMessage(cityUpdateRequest.name(), city.getState(), city.getCountry()));
         }
 
         city.setName(cityUpdateRequest.name());
@@ -81,11 +84,18 @@ public class CityService {
         cityRepository.deleteById(id);
     }
 
+    // Names the state too, or "Portland already exists in United States" is ambiguous
+    private static String alreadyExistsMessage(String name, String state, Country country) {
+        String place = state == null ? name : name + ", " + state;
+        return "City already exists with name: " + place + " in country: " + country.getName();
+    }
+
     // Private helper to keep code DRY (Don't Repeat Yourself)
     private CityResponse mapToResponse(City city) {
         return new CityResponse(
                 city.getId(),
                 city.getName(),
+                city.getState(),
                 city.getLatitude(),
                 city.getLongitude(),
                 city.getCountry().getName(),

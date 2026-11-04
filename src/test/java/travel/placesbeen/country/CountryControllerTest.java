@@ -41,13 +41,14 @@ class CountryControllerTest {
 
     @Test
     void shouldReturnCountriesWithCitiesWhenRequested() throws Exception {
-        CityResponse berlin = new CityResponse(10L, "Berlin", 52.52, 13.405, null, null, null);
+        CityResponse berlin = new CityResponse(10L, "Berlin", "Berlin", 52.52, 13.405, null, null, null);
         when(countryService.getAllCountries(true))
                 .thenReturn(List.of(new CountryResponse(1L, "Germany", "DE", "🇩🇪", List.of(berlin))));
 
         mockMvc.perform(get("/api/countries").param("includeCities", "true").header("Api-Version", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].cities[0].name").value("Berlin"))
+                .andExpect(jsonPath("$[0].cities[0].state").value("Berlin"))
                 .andExpect(jsonPath("$[0].cities[0].country").doesNotExist());
     }
 

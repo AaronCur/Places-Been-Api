@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +31,7 @@ public class CityControllerTest {
     private static final String VALID_BODY = """
             {
                 "name": "Berlin",
+                "state": "Berlin",
                 "countryCode": "DE",
                 "latitude": 52.52,
                 "longitude": 13.405
@@ -38,33 +40,36 @@ public class CityControllerTest {
 
     @Test
     void shouldReturnAllCities() throws Exception {
-        CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
+        CityResponse city = new CityResponse(1L, "Berlin", "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.getAllCities()).thenReturn(List.of(city));
 
         mockMvc.perform(get("/api/cities").header("Api-Version", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("Berlin"));
+                .andExpect(jsonPath("$[0].name").value("Berlin"))
+                .andExpect(jsonPath("$[0].state").value("Berlin"));
     }
 
     @Test
     void shouldReturnCityById() throws Exception {
-        CityResponse city = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
+        CityResponse city = new CityResponse(1L, "Berlin", "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.getCityById(1L)).thenReturn(city);
 
         mockMvc.perform(get("/api/cities/1").header("Api-Version", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Berlin"));
+                .andExpect(jsonPath("$.name").value("Berlin"))
+                .andExpect(jsonPath("$.state").value("Berlin"));
     }
 
     @Test
     void shouldAddCity() throws Exception {
-        CityResponse response = new CityResponse(1L, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
+        CityResponse response = new CityResponse(1L, "Berlin", "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.addCity(any(CityRequest.class))).thenReturn(response);
 
         // Use a Java Text Block string literal instead of ObjectMapper
         String jsonRequestBody = """
                 {
                     "name": "Berlin",
+                    "state": "Berlin",
                     "countryCode": "DE",
                     "latitude": 52.52,
                     "longitude": 13.405
@@ -76,12 +81,38 @@ public class CityControllerTest {
                         .content(jsonRequestBody)) // 👈 Injected directly
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
-                .andExpect(jsonPath("$.name").value("Berlin"));
+                .andExpect(jsonPath("$.name").value("Berlin"))
+                .andExpect(jsonPath("$.state").value("Berlin"));
+
+        verify(cityService).addCity(new CityRequest("Berlin", "Berlin", "DE", 52.52, 13.405));
+    }
+
+    @Test
+    void shouldAddCityWithoutState() throws Exception {
+        CityResponse response = new CityResponse(1L, "Gibraltar", null, 36.14, -5.35, "Gibraltar", "GI", "🇬🇮");
+        when(cityService.addCity(any(CityRequest.class))).thenReturn(response);
+
+        String jsonRequestBody = """
+                {
+                    "name": "Gibraltar",
+                    "countryCode": "GI",
+                    "latitude": 36.14,
+                    "longitude": -5.35
+                }
+                """;
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonRequestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.state").doesNotExist());
+
+        verify(cityService).addCity(new CityRequest("Gibraltar", null, "GI", 36.14, -5.35));
     }
 
     @Test
     void shouldUpdateCity() throws Exception {
-        CityResponse response = new CityResponse(1L, "Berlin Updated", 52.52, 13.405, "Germany", "DE", "🇩🇪");
+        CityResponse response = new CityResponse(1L, "Berlin Updated", "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪");
         when(cityService.updateCityById(any(CityUpdateRequest.class), eq(1L))).thenReturn(response);
 
         // Use a Java Text Block string literal instead of ObjectMapper
@@ -150,6 +181,19 @@ public class CityControllerTest {
     }
 
     @Test
+    void shouldReturn409WhenDatabaseRejectsDuplicate() throws Exception {
+        when(cityService.addCity(any(CityRequest.class)))
+                .thenThrow(new DataIntegrityViolationException("uk_city_name_state_country"));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message", containsString("Database conflict")));
+    }
+
+    @Test
     void shouldReturn400WhenCountryCodeUnknown() throws Exception {
         when(cityService.addCity(any(CityRequest.class))).thenThrow(new UnknownCountryCodeException("DE"));
 
@@ -187,6 +231,7 @@ public class CityControllerTest {
         String body = """
                 {
                     "name": "Berlin",
+                    "state": "Berlin",
                     "countryCode": "de",
                     "latitude": 52.52,
                     "longitude": 13.405
@@ -198,6 +243,120 @@ public class CityControllerTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("countryCode")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldReturn400WhenStateIsBlank() throws Exception {
+        String body = """
+                {
+                    "name": "Berlin",
+                    "state": "   ",
+                    "countryCode": "DE",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """;
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("state")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldReturn400WhenStateIsTooLong() throws Exception {
+        String body = """
+                {
+                    "name": "Berlin",
+                    "state": "%s",
+                    "countryCode": "DE",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """.formatted("x".repeat(256));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("state")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldAcceptNameAndStateOfExactly255Characters() throws Exception {
+        String name = "x".repeat(255);
+        String state = "y".repeat(255);
+        when(cityService.addCity(any(CityRequest.class)))
+                .thenReturn(new CityResponse(1L, name, state, 52.52, 13.405, "Germany", "DE", "🇩🇪"));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "%s", "state": "%s", "countryCode": "DE", "latitude": 52.52, "longitude": 13.405}
+                                """.formatted(name, state)))
+                .andExpect(status().isCreated());
+
+        verify(cityService).addCity(new CityRequest(name, state, "DE", 52.52, 13.405));
+    }
+
+    @Test
+    void shouldAcceptUpdatedNameOfExactly255Characters() throws Exception {
+        String name = "x".repeat(255);
+        when(cityService.updateCityById(any(CityUpdateRequest.class), eq(1L)))
+                .thenReturn(new CityResponse(1L, name, "Berlin", 52.52, 13.405, "Germany", "DE", "🇩🇪"));
+
+        mockMvc.perform(put("/api/cities/1").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "%s", "latitude": 52.52, "longitude": 13.405}
+                                """.formatted(name)))
+                .andExpect(status().isOk());
+
+        verify(cityService).updateCityById(new CityUpdateRequest(name, 52.52, 13.405), 1L);
+    }
+
+    @Test
+    void shouldReturn400WhenNameIsTooLong() throws Exception {
+        String body = """
+                {
+                    "name": "%s",
+                    "countryCode": "DE",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """.formatted("x".repeat(256));
+
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("name")));
+
+        verifyNoInteractions(cityService);
+    }
+
+    @Test
+    void shouldReturn400WhenUpdatedNameIsTooLong() throws Exception {
+        String body = """
+                {
+                    "name": "%s",
+                    "latitude": 52.52,
+                    "longitude": 13.405
+                }
+                """.formatted("x".repeat(256));
+
+        mockMvc.perform(put("/api/cities/1").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("name")));
 
         verifyNoInteractions(cityService);
     }
@@ -226,6 +385,7 @@ public class CityControllerTest {
         String body = """
                 {
                     "name": "Berlin",
+                    "state": "Berlin",
                     "countryCode": "DE",
                     "latitude": "north",
                     "longitude": 13.405

@@ -7,9 +7,7 @@ import lombok.Setter;
 import travel.placesbeen.country.Country;
 
 @Entity
-@Table(name = "city", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"name", "country_id"})
-})
+@Table(name = "city")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,6 +18,9 @@ public class City {
 
     @Column(nullable = false)
     private String name;
+
+    // Optional: the dataset's state/region, null where there is none. Part of the city's uniqueness (see V4)
+    private String state;
 
     @Column(nullable = false)
     private Double latitude;
@@ -33,8 +34,9 @@ public class City {
     private Country country;
 
     // Standard constructor for easy testing/service use
-    public City(String name, Double latitude, Double longitude, Country country) {
+    public City(String name, String state, Double latitude, Double longitude, Country country) {
         this.name = name;
+        this.state = state;
         this.latitude = latitude;
         this.longitude = longitude;
         this.country = country;
