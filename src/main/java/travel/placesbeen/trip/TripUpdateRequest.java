@@ -1,17 +1,17 @@
 package travel.placesbeen.trip;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
 // The place isn't editable: to move a trip, delete it and add it again
-// TODO: class-level @ValidDateRange (end on or after start), shared with TripRequest
+@ValidDateRange
 public record TripUpdateRequest(
-        // TODO: not in the future
-        @NotNull LocalDate startDate,
+        @NotNull @PastOrPresent LocalDate startDate,
         // Optional: null for a day trip
         LocalDate endDate,
-        // TODO: optional; max length to match the column
-        String notes
-) {
+        @Size(max = 2000) String notes
+) implements DateRange {
 }
