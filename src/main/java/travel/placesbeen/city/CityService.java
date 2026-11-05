@@ -22,21 +22,32 @@ public class CityService {
     }
 
     @Transactional
-    public CityResponse addCity(CityRequest cityrequest) {
+    public City findOrCreate(CityRequest cityRequest) {
+        Country country = findCountry(cityRequest.countryCode());
 
-        Country country = countryRepository.findByIsoCode(cityrequest.countryCode())
-                .orElseThrow(() -> new UnknownCountryCodeException(cityrequest.countryCode()));
+        String state = normalizeState(cityRequest.state());
 
-        // Stored without stray spaces, or " Maine" would count as a different state from "Maine"
-        String state = cityrequest.state() == null ? null : cityrequest.state().strip();
+        // A second trip to a city reuses the stored one (its name casing and coordinates win)
+        return cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityRequest.name(), state, country.getIsoCode())
+                .orElseGet(() -> cityRepository.save(
+                        new City(cityRequest.name(), state, cityRequest.latitude(), cityRequest.longitude(), country)));
 
-        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityrequest.name(), state, cityrequest.countryCode());
+    }
+
+    @Transactional
+    public CityResponse addCity(CityRequest cityRequest) {
+
+        Country country = findCountry(cityRequest.countryCode());
+
+        String state = normalizeState(cityRequest.state());
+
+        boolean alreadyExists = cityRepository.existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityRequest.name(), state, cityRequest.countryCode());
 
         if (alreadyExists) {
-            throw new IllegalStateException(alreadyExistsMessage(cityrequest.name(), state, country));
+            throw new IllegalStateException(alreadyExistsMessage(cityRequest.name(), state, country));
         }
 
-        City city = new City(cityrequest.name(), state, cityrequest.latitude(), cityrequest.longitude(), country);
+        City city = new City(cityRequest.name(), state, cityRequest.latitude(), cityRequest.longitude(), country);
 
         City savedCity = cityRepository.save(city);
         return mapToResponse(savedCity);
@@ -89,6 +100,19 @@ public class CityService {
         String place = state == null ? name : name + ", " + state;
         return "City already exists with name: " + place + " in country: " + country.getName();
     }
+
+    private Country findCountry(String isoCode) {
+
+        return countryRepository.findByIsoCode(isoCode)
+                .orElseThrow(() -> new UnknownCountryCodeException(isoCode));
+
+    }
+
+    private String normalizeState(String state) {
+        return state == null ? null : state.strip();
+    }
+
+
 
     // Private helper to keep code DRY (Don't Repeat Yourself)
     private CityResponse mapToResponse(City city) {
