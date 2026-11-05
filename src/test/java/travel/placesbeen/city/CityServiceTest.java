@@ -247,13 +247,12 @@ class CityServiceTest {
     void findOrCreate_returnsExistingCityWithoutSaving() {
         Country portugal = country(3L, "Portugal", "PT");
         City lisbon = city(5L, "Lisbon", "Lisbon", portugal);
-        // Different casing and coordinates on purpose: the stored city wins
-        CityRequest request = new CityRequest("lisbon", "Lisbon", "PT", 0.0, 0.0);
         when(countryRepository.findByIsoCode("PT")).thenReturn(Optional.of(portugal));
         when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("lisbon", "Lisbon", "PT"))
                 .thenReturn(Optional.of(lisbon));
 
-        City result = cityService.findOrCreate(request);
+        // Different casing and coordinates on purpose: the stored city wins
+        City result = cityService.findOrCreate("lisbon", "Lisbon", "PT", 0.0, 0.0);
 
         assertThat(result).isSameAs(lisbon);
         assertThat(result.getName()).isEqualTo("Lisbon");
@@ -264,7 +263,6 @@ class CityServiceTest {
     @Test
     void findOrCreate_savesNewCityWhenNoneMatches() {
         Country portugal = country(3L, "Portugal", "PT");
-        CityRequest request = new CityRequest("Porto", "Porto", "PT", 41.150, -8.611);
         when(countryRepository.findByIsoCode("PT")).thenReturn(Optional.of(portugal));
         when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Porto", "Porto", "PT"))
                 .thenReturn(Optional.empty());
@@ -274,7 +272,7 @@ class CityServiceTest {
             return saved;
         });
 
-        City result = cityService.findOrCreate(request);
+        City result = cityService.findOrCreate("Porto", "Porto", "PT", 41.150, -8.611);
 
         ArgumentCaptor<City> captor = ArgumentCaptor.forClass(City.class);
         verify(cityRepository).save(captor.capture());
@@ -292,10 +290,9 @@ class CityServiceTest {
 
     @Test
     void findOrCreate_throwsForUnknownCountryCode() {
-        CityRequest request = new CityRequest("Atlantis", null, "XX", 0.0, 0.0);
         when(countryRepository.findByIsoCode("XX")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cityService.findOrCreate(request))
+        assertThatThrownBy(() -> cityService.findOrCreate("Atlantis", null, "XX", 0.0, 0.0))
                 .isInstanceOf(UnknownCountryCodeException.class);
 
         verifyNoInteractions(cityRepository);
@@ -303,13 +300,12 @@ class CityServiceTest {
 
     @Test
     void findOrCreate_stripsSpacesFromStateBeforeLookingUpAndSaving() {
-        CityRequest request = new CityRequest("Portland", " Maine ", "US", 43.661, -70.255);
         when(countryRepository.findByIsoCode("US")).thenReturn(Optional.of(country(9L, "United States", "US")));
         when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Maine", "US"))
                 .thenReturn(Optional.empty());
         when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        City result = cityService.findOrCreate(request);
+        City result = cityService.findOrCreate("Portland", " Maine ", "US", 43.661, -70.255);
 
         // The stubbed lookup only matches "Maine"; with " Maine " Mockito's strict stubs fail the test
         assertThat(result.getState()).isEqualTo("Maine");
@@ -319,12 +315,11 @@ class CityServiceTest {
     void findOrCreate_looksUpNoStateForPlaceWithoutOne() {
         Country gibraltar = country(8L, "Gibraltar", "GI");
         City existing = city(4L, "Gibraltar", null, gibraltar);
-        CityRequest request = new CityRequest("Gibraltar", null, "GI", 36.14, -5.35);
         when(countryRepository.findByIsoCode("GI")).thenReturn(Optional.of(gibraltar));
         when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Gibraltar", null, "GI"))
                 .thenReturn(Optional.of(existing));
 
-        assertThat(cityService.findOrCreate(request)).isSameAs(existing);
+        assertThat(cityService.findOrCreate("Gibraltar", null, "GI", 36.14, -5.35)).isSameAs(existing);
         verify(cityRepository, never()).save(any());
     }
 }

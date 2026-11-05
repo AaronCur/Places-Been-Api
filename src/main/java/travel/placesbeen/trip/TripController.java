@@ -4,7 +4,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.net.URI;
 import java.util.List;
 
 
@@ -20,21 +22,33 @@ public class TripController {
 
     @GetMapping(version = "1")
     public ResponseEntity<List<TripResponse>> getAllTrips() {
-        throw new UnsupportedOperationException("TODO: 200 with all trips, newest first");
+        return ResponseEntity.ok(tripService.getAllTrips());
+    }
+
+    @GetMapping(value = "/{id}", version = "1")
+    public ResponseEntity<TripResponse> getTripById(@PathVariable Long id) {
+        return ResponseEntity.ok(tripService.getTripById(id));
     }
 
     @PostMapping(version = "1")
     public ResponseEntity<TripResponse> addTrip(@Valid @RequestBody TripRequest tripRequest) {
-        throw new UnsupportedOperationException("TODO: 201 + Location header");
+        TripResponse newTrip = tripService.addTrip(tripRequest);
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentRequest()    // Takes "http://localhost:8080/api/v1/trips"
+                .path("/{id}")           // Appends "/{id}"
+                .buildAndExpand(newTrip.id())
+                .toUri();
+        return ResponseEntity.created(location).body(newTrip);
     }
 
     @PutMapping(value = "/{id}", version = "1")
     public ResponseEntity<TripResponse> updateTripById(@PathVariable Long id, @Valid @RequestBody TripUpdateRequest tripUpdateRequest) {
-        throw new UnsupportedOperationException("TODO: 200 with the updated trip");
+        return ResponseEntity.ok(tripService.updateTripById(tripUpdateRequest, id));
     }
 
     @DeleteMapping(value = "/{id}", version = "1")
     public ResponseEntity<Void> deleteTripById(@PathVariable Long id) {
-        throw new UnsupportedOperationException("TODO: 204");
+        tripService.deleteTripById(id);
+        return ResponseEntity.noContent().build();
     }
 }

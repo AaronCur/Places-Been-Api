@@ -22,15 +22,15 @@ public class CityService {
     }
 
     @Transactional
-    public City findOrCreate(CityRequest cityRequest) {
-        Country country = findCountry(cityRequest.countryCode());
+    public City findOrCreate(String name, String state, String countryIsoCode, Double latitude, Double longitude) {
+        Country country = findCountry(countryIsoCode);
 
-        String state = normalizeState(cityRequest.state());
+        String normalizedState = normalizeState(state);
 
         // A second trip to a city reuses the stored one (its name casing and coordinates win)
-        return cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(cityRequest.name(), state, country.getIsoCode())
+        return cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(name, normalizedState, countryIsoCode)
                 .orElseGet(() -> cityRepository.save(
-                        new City(cityRequest.name(), state, cityRequest.latitude(), cityRequest.longitude(), country)));
+                        new City(name, normalizedState, latitude, longitude, country)));
 
     }
 

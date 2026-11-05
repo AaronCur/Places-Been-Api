@@ -1,11 +1,29 @@
 package travel.placesbeen.trip;
 
-import org.junit.jupiter.api.Disabled;
+import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import travel.placesbeen.country.UnknownCountryCodeException;
+
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(TripController.class)
 public class TripControllerTest {
@@ -16,187 +34,388 @@ public class TripControllerTest {
     @MockitoBean
     private TripService tripService;
 
+    private static final TripResponse.CitySummary LISBON =
+            new TripResponse.CitySummary(5L, "Lisbon", "Lisbon", 38.722, -9.139);
+    private static final TripResponse.CountrySummary PORTUGAL =
+            new TripResponse.CountrySummary("PT", "Portugal", "🇵🇹");
+
+    private static final TripResponse LISBON_TRIP = new TripResponse(1L,
+            LocalDate.of(2025, 8, 20), LocalDate.of(2025, 8, 27), "Pastéis de nata", LISBON, PORTUGAL);
+
+    // --- Request bodies ---
+    // A valid POST body as raw JSON values, so each test changes or removes just the field it's about
+
+    private static Map<String, String> validTripFields() {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("cityName", "\"Lisbon\"");
+        fields.put("state", "\"Lisbon\"");
+        fields.put("countryCode", "\"PT\"");
+        fields.put("latitude", "38.722");
+        fields.put("longitude", "-9.139");
+        fields.put("startDate", "\"2025-08-20\"");
+        fields.put("endDate", "\"2025-08-27\"");
+        fields.put("notes", "\"Pastéis de nata\"");
+        return fields;
+    }
+
+    private static String json(Map<String, String> fields) {
+        return fields.entrySet().stream()
+                .map(field -> "\"" + field.getKey() + "\": " + field.getValue())
+                .collect(Collectors.joining(", ", "{", "}"));
+    }
+
+    private static String validTripBody() {
+        return json(validTripFields());
+    }
+
+    private static String tripBodyWith(String field, String jsonValue) {
+        Map<String, String> fields = validTripFields();
+        fields.put(field, jsonValue);
+        return json(fields);
+    }
+
+    private static String tripBodyWithout(String... fieldsToRemove) {
+        Map<String, String> fields = validTripFields();
+        for (String field : fieldsToRemove) {
+            fields.remove(field);
+        }
+        return json(fields);
+    }
+
+    private static final String VALID_UPDATE_BODY = """
+            {
+                "startDate": "2025-08-21",
+                "endDate": "2025-08-28",
+                "notes": "Went back for more"
+            }
+            """;
+
     // --- Happy paths ---
 
     @Test
-    @Disabled("TODO")
     void shouldReturnAllTripsNewestFirst() throws Exception {
-        // given the service returns two trips, newest first
-        // when GET /api/trips
-        // then 200 and the trips in that order, with nested city and country
+        TripResponse newer = new TripResponse(2L, LocalDate.of(2026, 3, 10), null, null,
+                new TripResponse.CitySummary(7L, "Valencia", "Valencia", 39.47, -0.376),
+                new TripResponse.CountrySummary("ES", "Spain", "🇪🇸"));
+        when(tripService.getAllTrips()).thenReturn(List.of(newer, LISBON_TRIP));
+
+        mockMvc.perform(get("/api/trips").header("Api-Version", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(2))
+                .andExpect(jsonPath("$[0].startDate").value("2026-03-10"))
+                // @JsonInclude(NON_NULL): a day trip has no endDate key at all, not "endDate": null
+                .andExpect(jsonPath("$[0].endDate").doesNotExist())
+                .andExpect(jsonPath("$[0].city.name").value("Valencia"))
+                .andExpect(jsonPath("$[0].country.isoCode").value("ES"))
+                .andExpect(jsonPath("$[1].id").value(1))
+                .andExpect(jsonPath("$[1].endDate").value("2025-08-27"))
+                .andExpect(jsonPath("$[1].notes").value("Pastéis de nata"))
+                .andExpect(jsonPath("$[1].city.id").value(5))
+                .andExpect(jsonPath("$[1].city.latitude").value(38.722))
+                .andExpect(jsonPath("$[1].city.longitude").value(-9.139))
+                .andExpect(jsonPath("$[1].country.name").value("Portugal"))
+                .andExpect(jsonPath("$[1].country.flag").value("🇵🇹"));
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturnEmptyListWhenNoTrips() throws Exception {
-        // given the service returns no trips
-        // when GET /api/trips
-        // then 200 and []
+        when(tripService.getAllTrips()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/trips").header("Api-Version", "1"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
     }
 
     @Test
-    @Disabled("TODO")
+    void shouldReturnTripById() throws Exception {
+        when(tripService.getTripById(1L)).thenReturn(LISBON_TRIP);
+
+        mockMvc.perform(get("/api/trips/1").header("Api-Version", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.startDate").value("2025-08-20"))
+                .andExpect(jsonPath("$.city.name").value("Lisbon"))
+                .andExpect(jsonPath("$.country.isoCode").value("PT"));
+    }
+
+    @Test
     void shouldAddTrip() throws Exception {
-        // given a valid body with start and end dates
-        // when POST /api/trips
-        // then 201, a Location header ending in the new id, and the trip in the body
+        when(tripService.addTrip(any(TripRequest.class))).thenReturn(LISBON_TRIP);
+
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validTripBody()))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", endsWith("/api/trips/1")))
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.city.name").value("Lisbon"));
+
+        // The JSON reached the service intact, dates parsed from ISO strings
+        ArgumentCaptor<TripRequest> captor = ArgumentCaptor.forClass(TripRequest.class);
+        verify(tripService).addTrip(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(new TripRequest("Lisbon", "Lisbon", "PT", 38.722, -9.139,
+                LocalDate.of(2025, 8, 20), LocalDate.of(2025, 8, 27), "Pastéis de nata"));
     }
 
     @Test
-    @Disabled("TODO")
     void shouldAddDayTripWithoutEndDate() throws Exception {
-        // given a valid body with no endDate
-        // when POST /api/trips
-        // then 201 and the service receives a request with endDate null
+        when(tripService.addTrip(any(TripRequest.class))).thenReturn(LISBON_TRIP);
+
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tripBodyWithout("endDate")))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<TripRequest> captor = ArgumentCaptor.forClass(TripRequest.class);
+        verify(tripService).addTrip(captor.capture());
+        assertThat(captor.getValue().endDate()).isNull();
     }
 
     @Test
-    @Disabled("TODO")
+    void shouldAddTripWithoutStateOrNotes() throws Exception {
+        when(tripService.addTrip(any(TripRequest.class))).thenReturn(LISBON_TRIP);
+
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tripBodyWithout("state", "notes")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void shouldAcceptNotesOfExactly2000Characters() throws Exception {
+        when(tripService.addTrip(any(TripRequest.class))).thenReturn(LISBON_TRIP);
+
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tripBodyWith("notes", "\"" + "a".repeat(2000) + "\"")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void shouldUpdateTrip() throws Exception {
-        // given a valid update body
-        // when PUT /api/trips/1
-        // then 200 and the updated trip
+        TripResponse updated = new TripResponse(1L, LocalDate.of(2025, 8, 21), LocalDate.of(2025, 8, 28),
+                "Went back for more", LISBON, PORTUGAL);
+        when(tripService.updateTripById(any(TripUpdateRequest.class), eq(1L))).thenReturn(updated);
+
+        mockMvc.perform(put("/api/trips/1").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_UPDATE_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startDate").value("2025-08-21"))
+                .andExpect(jsonPath("$.endDate").value("2025-08-28"))
+                .andExpect(jsonPath("$.notes").value("Went back for more"));
+
+        verify(tripService).updateTripById(
+                new TripUpdateRequest(LocalDate.of(2025, 8, 21), LocalDate.of(2025, 8, 28), "Went back for more"), 1L);
     }
 
     @Test
-    @Disabled("TODO")
     void shouldDeleteTrip() throws Exception {
-        // given an existing trip
-        // when DELETE /api/trips/1
-        // then 204 and the service was asked to delete id 1
+        mockMvc.perform(delete("/api/trips/1").header("Api-Version", "1"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(tripService).deleteTripById(1L);
     }
 
     // --- Validation on POST (400, service never called) ---
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenCityNameMissing() throws Exception {
-        // given a body without cityName
-        // when POST /api/trips
-        // then 400 naming cityName
+        expectPostRejected(tripBodyWithout("cityName"), "cityName");
     }
 
     @Test
-    @Disabled("TODO")
+    void shouldReturn400WhenCityNameIsBlank() throws Exception {
+        expectPostRejected(tripBodyWith("cityName", "\"   \""), "cityName");
+    }
+
+    @Test
+    void shouldReturn400WhenStateIsBlank() throws Exception {
+        expectPostRejected(tripBodyWith("state", "\"  \""), "state");
+    }
+
+    @Test
     void shouldReturn400WhenCountryCodeMissing() throws Exception {
-        // given a body without countryCode
-        // when POST /api/trips
-        // then 400 naming countryCode
+        expectPostRejected(tripBodyWithout("countryCode"), "countryCode");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenCountryCodeIsNotIsoAlpha2() throws Exception {
-        // given countryCode "deu"
-        // when POST /api/trips
-        // then 400 naming countryCode
+        expectPostRejected(tripBodyWith("countryCode", "\"deu\""), "countryCode");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenCoordinatesMissing() throws Exception {
-        // given a body without latitude and longitude
-        // when POST /api/trips
-        // then 400 naming both
+        expectPostRejected(tripBodyWithout("latitude", "longitude"), "latitude", "longitude");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenCoordinatesOutOfRange() throws Exception {
-        // given latitude 91 and longitude 181
-        // when POST /api/trips
-        // then 400 naming both
+        Map<String, String> fields = validTripFields();
+        fields.put("latitude", "91");
+        fields.put("longitude", "181");
+
+        expectPostRejected(json(fields), "latitude", "longitude");
     }
 
     @Test
-    @Disabled("TODO")
+    void shouldReturn400WhenCoordinatesBelowRange() throws Exception {
+        Map<String, String> fields = validTripFields();
+        fields.put("latitude", "-91");
+        fields.put("longitude", "-181");
+
+        expectPostRejected(json(fields), "latitude", "longitude");
+    }
+
+    @Test
     void shouldReturn400WhenStartDateMissing() throws Exception {
-        // given a body without startDate
-        // when POST /api/trips
-        // then 400 naming startDate
+        expectPostRejected(tripBodyWithout("startDate", "endDate"), "startDate");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenStartDateInFuture() throws Exception {
-        // given startDate tomorrow
-        // when POST /api/trips
-        // then 400 naming startDate
+        // Far enough ahead that the validator's clock (the real one) can't disagree
+        LocalDate nextYear = LocalDate.now().plusYears(1);
+        Map<String, String> fields = validTripFields();
+        fields.put("startDate", "\"" + nextYear + "\"");
+        fields.put("endDate", "\"" + nextYear.plusDays(3) + "\"");
+
+        expectPostRejected(json(fields), "startDate");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenEndDateBeforeStartDate() throws Exception {
-        // given endDate the day before startDate
-        // when POST /api/trips
-        // then 400 from the class-level date range check
+        // The class-level @ValidDateRange reports on endDate, so the message names it
+        expectPostRejected(tripBodyWith("endDate", "\"2025-08-19\""),
+                "endDate: End date must be on or after the start date");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenNotesTooLong() throws Exception {
-        // given notes one character over the limit
-        // when POST /api/trips
-        // then 400 naming notes
+        expectPostRejected(tripBodyWith("notes", "\"" + "a".repeat(2001) + "\""), "notes");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenDateIsMalformed() throws Exception {
-        // given startDate "12/10/2026"
-        // when POST /api/trips
-        // then 400 (malformed JSON / invalid data types)
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tripBodyWith("startDate", "\"12/10/2026\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Malformed JSON request body or invalid data types."));
+
+        verifyNoInteractions(tripService);
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenCountryCodeUnknown() throws Exception {
-        // given the service throws UnknownCountryCodeException for "QQ"
-        // when POST /api/trips
-        // then 400 naming QQ
+        // Passes validation (two capital letters) but isn't a seeded country
+        when(tripService.addTrip(any(TripRequest.class))).thenThrow(new UnknownCountryCodeException("QQ"));
+
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tripBodyWith("countryCode", "\"QQ\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Unknown country code: QQ"));
     }
 
     // --- Validation on PUT ---
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenUpdatedStartDateMissing() throws Exception {
-        // given an update body without startDate
-        // when PUT /api/trips/1
-        // then 400 naming startDate
+        expectPutRejected("""
+                { "endDate": "2025-08-28", "notes": "No start" }
+                """, "startDate");
     }
 
     @Test
-    @Disabled("TODO")
     void shouldReturn400WhenUpdatedEndDateBeforeStartDate() throws Exception {
-        // given an update body with endDate before startDate
-        // when PUT /api/trips/1
-        // then 400 from the class-level date range check
+        expectPutRejected("""
+                { "startDate": "2025-08-21", "endDate": "2025-08-20" }
+                """, "endDate: End date must be on or after the start date");
     }
 
     @Test
-    @Disabled("TODO")
+    void shouldReturn400WhenUpdatedNotesTooLong() throws Exception {
+        expectPutRejected("{ \"startDate\": \"2025-08-21\", \"notes\": \"" + "a".repeat(2001) + "\" }", "notes");
+    }
+
+    @Test
     void shouldReturn400WhenIdIsNotANumber() throws Exception {
-        // given id "abc"
-        // when PUT and DELETE /api/trips/abc
-        // then 400 for both
+        mockMvc.perform(get("/api/trips/abc").header("Api-Version", "1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid value 'abc' for parameter 'id'"));
+
+        mockMvc.perform(put("/api/trips/abc").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_UPDATE_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid value 'abc' for parameter 'id'"));
+
+        mockMvc.perform(delete("/api/trips/abc").header("Api-Version", "1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid value 'abc' for parameter 'id'"));
+
+        verifyNoInteractions(tripService);
     }
 
     // --- Not found ---
 
     @Test
-    @Disabled("TODO")
-    void shouldReturn404WhenUpdatingMissingTrip() throws Exception {
-        // given the service throws EntityNotFoundException for id 99
-        // when PUT /api/trips/99
-        // then 404
+    void shouldReturn404WhenTripNotFound() throws Exception {
+        when(tripService.getTripById(99L)).thenThrow(new EntityNotFoundException("Trip not found with id: 99"));
+
+        mockMvc.perform(get("/api/trips/99").header("Api-Version", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Trip not found with id: 99"));
     }
 
     @Test
-    @Disabled("TODO")
+    void shouldReturn404WhenUpdatingMissingTrip() throws Exception {
+        when(tripService.updateTripById(any(TripUpdateRequest.class), eq(99L)))
+                .thenThrow(new EntityNotFoundException("Trip not found with id: 99"));
+
+        mockMvc.perform(put("/api/trips/99").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_UPDATE_BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Trip not found with id: 99"));
+    }
+
+    @Test
     void shouldReturn404WhenDeletingMissingTrip() throws Exception {
-        // given the service throws EntityNotFoundException for id 99
-        // when DELETE /api/trips/99
-        // then 404
+        doThrow(new EntityNotFoundException("Trip not found with id: 99")).when(tripService).deleteTripById(99L);
+
+        mockMvc.perform(delete("/api/trips/99").header("Api-Version", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Trip not found with id: 99"));
+    }
+
+    // --- Helpers ---
+
+    private void expectPostRejected(String body, String... messageParts) throws Exception {
+        var result = mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        for (String part : messageParts) {
+            result.andExpect(jsonPath("$.message", containsString(part)));
+        }
+        verifyNoInteractions(tripService);
+    }
+
+    private void expectPutRejected(String body, String... messageParts) throws Exception {
+        var result = mockMvc.perform(put("/api/trips/1").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        for (String part : messageParts) {
+            result.andExpect(jsonPath("$.message", containsString(part)));
+        }
+        verifyNoInteractions(tripService);
     }
 }

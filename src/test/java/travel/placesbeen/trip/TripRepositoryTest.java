@@ -87,6 +87,24 @@ class TripRepositoryTest {
     }
 
     @Test
+    void findWithCityById_fetchesCityAndCountryInTheSameQuery() {
+        Trip saved = persistTrip(lisbon, LocalDate.of(2025, 6, 1), null);
+        entityManager.flush();
+        entityManager.clear(); // as above: without this the city is already loaded and the test proves nothing
+
+        assertThat(tripRepository.findWithCityById(saved.getId()))
+                .hasValueSatisfying(trip -> {
+                    assertThat(Hibernate.isInitialized(trip.getCity())).isTrue();
+                    assertThat(Hibernate.isInitialized(trip.getCity().getCountry())).isTrue();
+                });
+    }
+
+    @Test
+    void findWithCityById_isEmptyForUnknownId() {
+        assertThat(tripRepository.findWithCityById(999L)).isEmpty();
+    }
+
+    @Test
     void existsByCity_Id_isTrueForCityWithTrips() {
         persistTrip(lisbon, LocalDate.of(2024, 5, 1), null);
         persistTrip(lisbon, LocalDate.of(2025, 8, 20), LocalDate.of(2025, 8, 27));

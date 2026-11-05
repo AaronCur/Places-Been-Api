@@ -1,9 +1,15 @@
 package travel.placesbeen.trip;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import travel.placesbeen.city.City;
 import travel.placesbeen.city.CityService;
+import travel.placesbeen.country.Country;
+import travel.placesbeen.country.Flags;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -11,34 +17,80 @@ public class TripService {
 
     private final TripRepository tripRepository;
     private final CityService cityService;
-    // TODO: inject a java.time.Clock for createdAt (needs a Clock bean, e.g. in config/)
+    private final Clock clock;
 
-    public TripService(TripRepository tripRepository, CityService cityService) {
+    public TripService(TripRepository tripRepository, CityService cityService, Clock clock) {
         this.tripRepository = tripRepository;
         this.cityService = cityService;
+        this.clock = clock;
+    }
+
+    public TripResponse getTripById(Long id) {
+        return mapToResponse(findTripWithCityById(id));
     }
 
     @Transactional
     public TripResponse addTrip(TripRequest tripRequest) {
-        throw new UnsupportedOperationException("TODO: find or create the city by (name, state, country), then save the trip");
+        City city = cityService.findOrCreate(tripRequest.cityName(), tripRequest.state(), tripRequest.countryCode(), tripRequest.latitude(), tripRequest.longitude());
+
+        Trip trip = new Trip(city,tripRequest.startDate(),tripRequest.endDate(), tripRequest.notes(), Instant.now(clock));
+        Trip savedTrip = tripRepository.save(trip);
+        return mapToResponse(savedTrip);
     }
 
     public List<TripResponse> getAllTrips() {
-        throw new UnsupportedOperationException("TODO: all trips newest first, mapped to responses");
+        return tripRepository.findAllByOrderByStartDateDescIdDesc().stream().map(this::mapToResponse).toList();
     }
 
     @Transactional
     public TripResponse updateTripById(TripUpdateRequest tripUpdateRequest, Long id) {
-        throw new UnsupportedOperationException("TODO: change dates and notes only; 404 if missing");
+
+        Trip trip = findTripWithCityById(id);
+        trip.setStartDate(tripUpdateRequest.startDate());
+        trip.setEndDate(tripUpdateRequest.endDate());
+        trip.setNotes(tripUpdateRequest.notes());
+        Trip savedTrip = tripRepository.save(trip);
+        return mapToResponse(savedTrip);
     }
 
     @Transactional
     public void deleteTripById(Long id) {
-        throw new UnsupportedOperationException("TODO: delete the trip, then its city if that was its last trip; 404 if missing");
+        Trip trip = findTripById(id);
+        Long cityId =  trip.getCity().getId();
+        tripRepository.delete(trip);
+
+        if (!tripRepository.existsByCity_Id(cityId)) {
+            cityService.deleteCityById(cityId);
+        }
+
+    }
+
+    // The trip only; its city stays a lazy proxy (enough for getCity().getId())
+    private Trip findTripById(Long id) {
+       return tripRepository.findById(id).orElseThrow(() -> tripNotFound(id));
+    }
+
+    // The trip with its city and country loaded, for methods that map it to a response
+    private Trip findTripWithCityById(Long id) {
+        return tripRepository.findWithCityById(id).orElseThrow(() -> tripNotFound(id));
+    }
+
+    private static EntityNotFoundException tripNotFound(Long id) {
+        return new EntityNotFoundException("Trip not found with id: " + id);
     }
 
     private TripResponse mapToResponse(Trip trip) {
-        throw new UnsupportedOperationException("TODO: map trip, its city and its country (flag via Flags.fromIsoCode)");
+        City city = trip.getCity();
+        Country country = trip.getCity().getCountry();
+        TripResponse.CitySummary citySummary = new TripResponse.CitySummary(city.getId(), city.getName(), city.getState(), city.getLatitude(), city.getLongitude());
+        TripResponse.CountrySummary countrySummary = new TripResponse.CountrySummary(country.getIsoCode(), country.getName(), Flags.fromIsoCode(country.getIsoCode()));
+        return new TripResponse(
+                 trip.getId(),
+                 trip.getStartDate(),
+                 trip.getEndDate(),
+                 trip.getNotes(),
+                 citySummary,
+                 countrySummary
+        );
     }
-
 }
