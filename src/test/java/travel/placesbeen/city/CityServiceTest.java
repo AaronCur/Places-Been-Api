@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import travel.placesbeen.country.Country;
 import travel.placesbeen.country.CountryRepository;
 import travel.placesbeen.country.UnknownCountryCodeException;
+import travel.placesbeen.trip.TripRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +28,9 @@ class CityServiceTest {
 
     @Mock
     private CountryRepository countryRepository;
+
+    @Mock
+    private TripRepository tripRepository;
 
     @InjectMocks
     private CityService cityService;
@@ -233,6 +237,18 @@ class CityServiceTest {
     }
 
     @Test
+    void deleteCityById_throwsWhenCityStillHasTrips() {
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", "Berlin", country(5L, "Germany", "DE"))));
+        when(tripRepository.existsByCity_Id(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> cityService.deleteCityById(1L))
+                .isInstanceOf(IllegalStateException.class) // -> 409
+                .hasMessage("City Berlin still has trips: delete them first");
+
+        verify(cityRepository, never()).deleteById(any());
+    }
+
+    @Test
     void deleteCityById_throwsWhenNotFound() {
         when(cityRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -241,5 +257,98 @@ class CityServiceTest {
 
         verify(cityRepository, never()).deleteById(any());
         verifyNoInteractions(countryRepository);
+    }
+
+    @Test
+    void findOrCreate_returnsExistingCityWithoutSaving() {
+        Country portugal = country(3L, "Portugal", "PT");
+        City lisbon = city(5L, "Lisbon", "Lisbon", portugal);
+        when(countryRepository.findByIsoCode("PT")).thenReturn(Optional.of(portugal));
+        when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("lisbon", "Lisbon", "PT"))
+                .thenReturn(Optional.of(lisbon));
+
+        // Different casing and coordinates on purpose: the stored city wins
+        City result = cityService.findOrCreate("lisbon", "Lisbon", "PT", 0.0, 0.0);
+
+        assertThat(result).isSameAs(lisbon);
+        assertThat(result.getName()).isEqualTo("Lisbon");
+        // Fails if orElseGet is swapped for orElse, which would save on every call
+        verify(cityRepository, never()).save(any());
+    }
+
+    @Test
+    void findOrCreate_savesNewCityWhenNoneMatches() {
+        Country portugal = country(3L, "Portugal", "PT");
+        when(countryRepository.findByIsoCode("PT")).thenReturn(Optional.of(portugal));
+        when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Porto", "Porto", "PT"))
+                .thenReturn(Optional.empty());
+        when(cityRepository.save(any(City.class))).thenAnswer(inv -> {
+            City saved = inv.getArgument(0);
+            saved.setId(6L);
+            return saved;
+        });
+
+        City result = cityService.findOrCreate("Porto", "Porto", "PT", 41.150, -8.611);
+
+        ArgumentCaptor<City> captor = ArgumentCaptor.forClass(City.class);
+        verify(cityRepository).save(captor.capture());
+        City saved = captor.getValue();
+        assertThat(saved.getName()).isEqualTo("Porto");
+        assertThat(saved.getState()).isEqualTo("Porto");
+        assertThat(saved.getLatitude()).isEqualTo(41.150);
+        assertThat(saved.getLongitude()).isEqualTo(-8.611);
+        assertThat(saved.getCountry()).isSameAs(portugal);
+        verify(countryRepository, never()).save(any()); // countries are seeded, never created here
+
+        // Returns what save returned (the managed entity with its id), not the object it built
+        assertThat(result.getId()).isEqualTo(6L);
+    }
+
+    @Test
+    void findOrCreate_throwsForUnknownCountryCode() {
+        when(countryRepository.findByIsoCode("XX")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> cityService.findOrCreate("Atlantis", null, "XX", 0.0, 0.0))
+                .isInstanceOf(UnknownCountryCodeException.class);
+
+        verifyNoInteractions(cityRepository);
+    }
+
+    @Test
+    void findOrCreate_stripsSpacesFromStateBeforeLookingUpAndSaving() {
+        when(countryRepository.findByIsoCode("US")).thenReturn(Optional.of(country(9L, "United States", "US")));
+        when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Portland", "Maine", "US"))
+                .thenReturn(Optional.empty());
+        when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        City result = cityService.findOrCreate("Portland", " Maine ", "US", 43.661, -70.255);
+
+        // The stubbed lookup only matches "Maine"; with " Maine " Mockito's strict stubs fail the test
+        assertThat(result.getState()).isEqualTo("Maine");
+    }
+
+    @Test
+    void findOrCreate_stripsSpacesFromNameBeforeLookingUpAndSaving() {
+        when(countryRepository.findByIsoCode("PT")).thenReturn(Optional.of(country(3L, "Portugal", "PT")));
+        when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Porto", "Porto", "PT"))
+                .thenReturn(Optional.empty());
+        when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        City result = cityService.findOrCreate("  Porto ", "Porto", "PT", 41.150, -8.611);
+
+        // As with state: the strict stub only matches "Porto", so an unstripped lookup fails the test
+        assertThat(result.getName()).isEqualTo("Porto");
+    }
+
+    @Test
+    void findOrCreate_looksUpNoStateForPlaceWithoutOne() {
+        Country gibraltar = country(8L, "Gibraltar", "GI");
+        City existing = city(4L, "Gibraltar", null, gibraltar);
+        when(countryRepository.findByIsoCode("GI")).thenReturn(Optional.of(gibraltar));
+        when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Gibraltar", null, "GI"))
+                .thenReturn(Optional.of(existing));
+
+        assertThat(cityService.findOrCreate("Gibraltar", null, "GI", 36.14, -5.35)).isSameAs(existing);
+        verify(cityRepository, never()).save(any());
     }
 }

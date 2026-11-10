@@ -8,6 +8,9 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: validate
+  flyway:
+    # Same as the main config: this file replaces it in the tests rather than adding to it
+    locations: classpath:db/migration,classpath:db/vendor/{vendor}
   mvc:
     apiversion:
       supported: 1
