@@ -62,6 +62,10 @@ If the pattern seems wrong for a new case, say so; don't silently diverge or "fi
 - Schema changes go in a new Flyway migration, `src/main/resources/db/migration/V<n>__<description>.sql`.
   Hibernate only validates (`ddl-auto: validate`). Never edit a migration that has already run anywhere;
   add a new one. Existing databases (Supabase) were baselined at V1.
+- When a migration needs SQL that H2 can't run (e.g. V6's expression index), put the real one in
+  `db/vendor/postgresql/` and an H2 stand-in enforcing the same rule in `db/vendor/h2/`, same version and name.
+  Flyway loads `db/migration` plus `db/vendor/{vendor}` (both `application.yaml` files). Keep the pair in step;
+  the stand-ins go away with Testcontainers.
 
 ## Testing
 

@@ -18,6 +18,8 @@ spring:
   flyway:
     # Existing databases (Supabase) already have the V1 tables: record them as version 1 instead of failing
     baseline-on-migrate: true
+    # Shared migrations, plus the few that need database-specific SQL ({vendor} = postgresql, or h2 in the tests)
+    locations: classpath:db/migration,classpath:db/vendor/{vendor}
   mvc:
     apiversion:
       supported: 1
