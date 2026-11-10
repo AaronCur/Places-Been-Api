@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -125,6 +126,20 @@ public class TripControllerTest {
         mockMvc.perform(get("/api/trips").header("Api-Version", "1"))
                 .andExpect(status().isOk())
                 .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void shouldLeaveOutStateForCityWithoutOne() throws Exception {
+        TripResponse gibraltar = new TripResponse(3L, LocalDate.of(2024, 5, 1), null, null,
+                new TripResponse.CitySummary(9L, "Gibraltar", null, 36.14, -5.35),
+                new TripResponse.CountrySummary("GI", "Gibraltar", "🇬🇮"));
+        when(tripService.getTripById(3L)).thenReturn(gibraltar);
+
+        mockMvc.perform(get("/api/trips/3").header("Api-Version", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.city.name").value("Gibraltar"))
+                // CitySummary has its own @JsonInclude(NON_NULL); the outer one doesn't apply to nested records
+                .andExpect(jsonPath("$.city.state").doesNotExist());
     }
 
     @Test
@@ -391,6 +406,22 @@ public class TripControllerTest {
         mockMvc.perform(delete("/api/trips/99").header("Api-Version", "1"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Trip not found with id: 99"));
+    }
+
+    // --- 409 ---
+
+    @Test
+    void shouldReturn409WhenDatabaseRejectsTheNewCity() throws Exception {
+        // Two requests creating the same new city at once: both miss the lookup, the second insert hits the unique index
+        when(tripService.addTrip(any(TripRequest.class)))
+                .thenThrow(new DataIntegrityViolationException("uk_city_name_state_country"));
+
+        mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validTripBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message", containsString("Database conflict")));
     }
 
     // --- Helpers ---

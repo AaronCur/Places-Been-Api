@@ -168,6 +168,16 @@ public class CityControllerTest {
     }
 
     @Test
+    void shouldReturn409WhenDeletingCityThatStillHasTrips() throws Exception {
+        doThrow(new IllegalStateException("City Berlin still has trips: delete them first"))
+                .when(cityService).deleteCityById(1L);
+
+        mockMvc.perform(delete("/api/cities/1").header("Api-Version", "1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("City Berlin still has trips: delete them first"));
+    }
+
+    @Test
     void shouldReturn409WhenCityAlreadyExists() throws Exception {
         when(cityService.addCity(any(CityRequest.class)))
                 .thenThrow(new IllegalStateException("City already exists with name: Berlin in country: Germany"));

@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import travel.placesbeen.country.Country;
 import travel.placesbeen.country.CountryRepository;
 import travel.placesbeen.country.UnknownCountryCodeException;
+import travel.placesbeen.trip.TripRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +28,9 @@ class CityServiceTest {
 
     @Mock
     private CountryRepository countryRepository;
+
+    @Mock
+    private TripRepository tripRepository;
 
     @InjectMocks
     private CityService cityService;
@@ -233,6 +237,18 @@ class CityServiceTest {
     }
 
     @Test
+    void deleteCityById_throwsWhenCityStillHasTrips() {
+        when(cityRepository.findById(1L)).thenReturn(Optional.of(city(1L, "Berlin", "Berlin", country(5L, "Germany", "DE"))));
+        when(tripRepository.existsByCity_Id(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> cityService.deleteCityById(1L))
+                .isInstanceOf(IllegalStateException.class) // -> 409
+                .hasMessage("City Berlin still has trips: delete them first");
+
+        verify(cityRepository, never()).deleteById(any());
+    }
+
+    @Test
     void deleteCityById_throwsWhenNotFound() {
         when(cityRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -309,6 +325,19 @@ class CityServiceTest {
 
         // The stubbed lookup only matches "Maine"; with " Maine " Mockito's strict stubs fail the test
         assertThat(result.getState()).isEqualTo("Maine");
+    }
+
+    @Test
+    void findOrCreate_stripsSpacesFromNameBeforeLookingUpAndSaving() {
+        when(countryRepository.findByIsoCode("PT")).thenReturn(Optional.of(country(3L, "Portugal", "PT")));
+        when(cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("Porto", "Porto", "PT"))
+                .thenReturn(Optional.empty());
+        when(cityRepository.save(any(City.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        City result = cityService.findOrCreate("  Porto ", "Porto", "PT", 41.150, -8.611);
+
+        // As with state: the strict stub only matches "Porto", so an unstripped lookup fails the test
+        assertThat(result.getName()).isEqualTo("Porto");
     }
 
     @Test

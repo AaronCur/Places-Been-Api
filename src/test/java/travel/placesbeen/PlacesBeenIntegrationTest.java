@@ -1,5 +1,6 @@
 package travel.placesbeen;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import travel.placesbeen.city.CityRepository;
 import travel.placesbeen.country.CountryRepository;
+import travel.placesbeen.trip.TripRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -37,9 +39,31 @@ class PlacesBeenIntegrationTest {
     @Autowired
     private CountryRepository countryRepository;
 
+    @Autowired
+    private TripRepository tripRepository;
+
     @BeforeEach
     void cleanDatabase() {
+        tripRepository.deleteAll(); // first: trips point at cities, and trip.city_id has no ON DELETE
         cityRepository.deleteAll(); // countries are seeded reference data, so they stay
+    }
+
+    // Returns the trip's Location; the response body carries the city id
+    private MvcResult createTrip(String cityName, String state, String countryCode, String startDate) throws Exception {
+        String body = """
+                {"cityName": "%s", "state": "%s", "countryCode": "%s", "latitude": 38.722, "longitude": -9.139,
+                 "startDate": "%s"}
+                """.formatted(cityName, state, countryCode, startDate);
+
+        return mockMvc.perform(post("/api/trips").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn();
+    }
+
+    private static long cityIdOf(MvcResult tripResult) throws Exception {
+        return ((Number) JsonPath.read(tripResult.getResponse().getContentAsString(), "$.city.id")).longValue();
     }
 
     private String createCity(String name, String state, String countryCode, double lat, double lon) throws Exception {
@@ -351,6 +375,57 @@ class PlacesBeenIntegrationTest {
         mockMvc.perform(get(munich).header("Api-Version", "1"))
                 .andExpect(status().isNotFound());
         assertThat(countryRepository.findByIsoCode("DE")).isPresent(); // seeded country is kept
+    }
+
+    @Test
+    void caseOnlyDuplicateThatGetsPastTheCheckIsRejectedByTheDatabase() throws Exception {
+        createCity("Portland", "Maine", "US", 43.661, -70.255);
+        doReturn(false).when(cityRepository)
+                .existsByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode("PORTLAND", "maine", "US");
+
+        // Before V6 the unique constraint compared exact text, so this insert succeeded and left two Portlands
+        mockMvc.perform(post("/api/cities").header("Api-Version", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "PORTLAND", "state": "maine", "countryCode": "US", "latitude": 43.661, "longitude": -70.255}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Database conflict: The record may already exist or violates a database constraint."));
+    }
+
+    @Test
+    void secondTripToCityReusesItAndDeletingTheLastTripDeletesTheCity() throws Exception {
+        MvcResult first = createTrip("Lisbon", "Lisbon", "PT", "2024-05-01");
+        MvcResult second = createTrip(" lisbon ", "Lisbon", "PT", "2025-08-20"); // same city despite case and spaces
+        long cityId = cityIdOf(first);
+        assertThat(cityIdOf(second)).isEqualTo(cityId);
+
+        mockMvc.perform(delete(first.getResponse().getHeader("Location")).header("Api-Version", "1"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/cities/" + cityId).header("Api-Version", "1"))
+                .andExpect(status().isOk()); // one trip left, so the city stays
+
+        mockMvc.perform(delete(second.getResponse().getHeader("Location")).header("Api-Version", "1"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/cities/" + cityId).header("Api-Version", "1"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/countries").header("Api-Version", "1"))
+                .andExpect(jsonPath("$").isEmpty()); // Portugal is no longer visited
+        assertThat(countryRepository.findByIsoCode("PT")).isPresent(); // but the seeded country is kept
+    }
+
+    @Test
+    void deletingCityThatStillHasTripsIsRejectedWithConflict() throws Exception {
+        long cityId = cityIdOf(createTrip("Lisbon", "Lisbon", "PT", "2025-08-20"));
+
+        mockMvc.perform(delete("/api/cities/" + cityId).header("Api-Version", "1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("City Lisbon still has trips: delete them first"));
+
+        mockMvc.perform(get("/api/cities/" + cityId).header("Api-Version", "1"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/trips").header("Api-Version", "1"))
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     @Test

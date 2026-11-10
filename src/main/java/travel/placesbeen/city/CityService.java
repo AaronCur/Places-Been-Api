@@ -7,6 +7,7 @@ import travel.placesbeen.country.Country;
 import travel.placesbeen.country.CountryRepository;
 import travel.placesbeen.country.Flags;
 import travel.placesbeen.country.UnknownCountryCodeException;
+import travel.placesbeen.trip.TripRepository;
 
 import java.util.List;
 
@@ -15,22 +16,26 @@ public class CityService {
 
     private final CityRepository cityRepository;
     private final CountryRepository countryRepository;
+    private final TripRepository tripRepository;
 
-    public CityService(CityRepository cityRepository, CountryRepository countryRepository) {
+    public CityService(CityRepository cityRepository, CountryRepository countryRepository, TripRepository tripRepository) {
         this.cityRepository = cityRepository;
         this.countryRepository = countryRepository;
+        this.tripRepository = tripRepository;
     }
 
     @Transactional
     public City findOrCreate(String name, String state, String countryIsoCode, Double latitude, Double longitude) {
         Country country = findCountry(countryIsoCode);
 
+        // @NotBlank lets " Lisbon " through; without the strip it wouldn't match a stored "Lisbon"
+        String strippedName = name.strip();
         String normalizedState = normalizeState(state);
 
         // A second trip to a city reuses the stored one (its name casing and coordinates win)
-        return cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(name, normalizedState, countryIsoCode)
+        return cityRepository.findByNameIgnoreCaseAndStateIgnoreCaseAndCountry_IsoCode(strippedName, normalizedState, countryIsoCode)
                 .orElseGet(() -> cityRepository.save(
-                        new City(name, normalizedState, latitude, longitude, country)));
+                        new City(strippedName, normalizedState, latitude, longitude, country)));
 
     }
 
@@ -89,7 +94,13 @@ public class CityService {
     @Transactional
     public void deleteCityById(Long id) {
 
-        cityRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
+        City city = cityRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
+
+        // trip.city_id has no ON DELETE, so the database would refuse this anyway, but only at commit and as a generic
+        // "Database conflict". Say what's actually wrong. (TripService only calls this once the city's last trip is gone.)
+        if (tripRepository.existsByCity_Id(id)) {
+            throw new IllegalStateException("City " + city.getName() + " still has trips: delete them first");
+        }
 
         // Countries are seeded reference data, so they stay; a country without cities is simply no longer visited
         cityRepository.deleteById(id);

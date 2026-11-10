@@ -33,7 +33,7 @@ public class TripService {
     public TripResponse addTrip(TripRequest tripRequest) {
         City city = cityService.findOrCreate(tripRequest.cityName(), tripRequest.state(), tripRequest.countryCode(), tripRequest.latitude(), tripRequest.longitude());
 
-        Trip trip = new Trip(city,tripRequest.startDate(),tripRequest.endDate(), tripRequest.notes(), Instant.now(clock));
+        Trip trip = new Trip(city, tripRequest.startDate(), tripRequest.endDate(), tripRequest.notes(), Instant.now(clock));
         Trip savedTrip = tripRepository.save(trip);
         return mapToResponse(savedTrip);
     }
@@ -56,7 +56,7 @@ public class TripService {
     @Transactional
     public void deleteTripById(Long id) {
         Trip trip = findTripById(id);
-        Long cityId =  trip.getCity().getId();
+        Long cityId = trip.getCity().getId();
         tripRepository.delete(trip);
 
         if (!tripRepository.existsByCity_Id(cityId)) {

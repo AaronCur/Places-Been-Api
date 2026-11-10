@@ -32,7 +32,7 @@ public class Trip {
     @Column(length = 2000)
     private String notes;
 
-    // TODO: set by the service from an injected Clock, so tests can pin it
+    // Set by TripService from the injected Clock, so tests can pin it
     @Column(nullable = false)
     private Instant createdAt;
 
