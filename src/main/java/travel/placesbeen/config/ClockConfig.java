@@ -1,5 +1,6 @@
 package travel.placesbeen.config;
 
+import org.springframework.boot.validation.autoconfigure.ValidationConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,5 +17,12 @@ public class ClockConfig {
     @Bean
     public Clock clock() {
         return Clock.systemUTC();
+    }
+
+    // Bean Validation has its own idea of "now" for @PastOrPresent/@Future etc., which defaults to the system clock.
+    // Point it at the Clock bean so validation and the services agree on what "today" is (and tests can fix both)
+    @Bean
+    public ValidationConfigurationCustomizer validationClock(Clock clock) {
+        return configuration -> configuration.clockProvider(() -> clock);
     }
 }
