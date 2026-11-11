@@ -1,5 +1,6 @@
-# Weekly update PRs, grouped so each ecosystem opens at most one PR for minor/patch bumps.
-# Major versions (e.g. a new Spring Boot major) still arrive as their own PRs.
+# Weekly update PRs: one per ecosystem (Maven, Docker, GitHub Actions).
+# If a grouped PR goes red, the failing package is usually a major bump; drop it with
+# `@dependabot ignore <package> major version` and the PR rebuilds without it.
 version: 2
 updates:
   - package-ecosystem: maven
@@ -7,13 +8,16 @@ updates:
     schedule:
       interval: weekly
     groups:
-      maven-minor-patch:
-        update-types: [minor, patch]
+      maven:
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
