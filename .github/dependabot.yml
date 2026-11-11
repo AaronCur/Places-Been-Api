@@ -1,0 +1,24 @@
+# Weekly update PRs, grouped so each ecosystem opens at most one PR for minor/patch bumps.
+# Major versions (e.g. a new Spring Boot major) still arrive as their own PRs.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      maven-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
