@@ -14,6 +14,7 @@ the API groups them by country and gives you summary stats — ready to back a m
 - [Error handling](#error-handling)
 - [Testing](#testing)
 - [Docker](#docker)
+- [Deployment](#deployment)
 
 ## Features
 
@@ -253,3 +254,15 @@ docker run -p 8080:8080 \
 ```
 
 > `docker-compose.yml` currently only starts the database; the API is run separately as shown above.
+
+## Deployment
+
+- **API:** Render free web service, built from the `Dockerfile`, at <https://places-been-api.onrender.com>.
+- **Database:** Supabase (Postgres). Flyway migrates it on startup.
+
+Render's free plan puts the service to sleep after 15 minutes without requests, and waking it takes 1–2 minutes.
+An external uptime monitor (UptimeRobot) calls `/actuator/health` every 5 minutes to keep it awake. The health check
+also queries the database, so the free Supabase project never sits idle long enough to be paused.
+
+> A scheduled GitHub Actions workflow did this job at first. It was removed because GitHub's cron is best effort:
+> it fired once in about 12 hours, so the API kept falling asleep.
