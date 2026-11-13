@@ -31,15 +31,8 @@ point `DB_URL` at `jdbc:postgresql://localhost:5433/places_been_db`; never run e
 
 ## Structure
 
-Package by feature under `travel.placesbeen`:
-
-```
-city/      City entity, CityRepository, CityService, CityController, CityRequest, CityResponse
-country/   Country entity, repository, service, controller, CountryResponse (read-only API)
-stats/     summary counts
-config/    CorsConfig
-common/exception/   GlobalExceptionHandler, ErrorResponse
-```
+Package by feature under `travel.placesbeen`: one package per feature (`city/`, `trip/`, …), plus `config/` and
+`common/exception/`.
 
 ## Reference implementation
 
@@ -90,5 +83,4 @@ If the pattern seems wrong for a new case, say so; don't silently diverge or "fi
 
 - Migrate `ErrorResponse` to RFC 9457 `ProblemDetail`.
 - Testcontainers for repository and `@SpringBootTest` tests.
-- Add a `Trip` feature (being hand-coded).
 - Decide whether to seed countries from ISO 3166 instead of creating them when a city is added.
